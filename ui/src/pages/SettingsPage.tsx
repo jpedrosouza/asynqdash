@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Button, Select, Tabs } from "@cloudflare/kumo";
-import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react";
+import { Button, Link, LinkButton, Select, Tabs } from "@cloudflare/kumo";
+import { ArrowCounterClockwiseIcon, BugIcon, GithubLogoIcon } from "@phosphor-icons/react";
 import {
   DEFAULT_SETTINGS,
   PAGE_SIZE_OPTIONS,
@@ -13,6 +13,8 @@ import { READ_ONLY } from "../lib/flags";
 import { Card, Page, PageHeader } from "../components/common";
 
 const POLL_OPTIONS = [2, 5, 10, 15, 30, 60];
+
+const REPOSITORY_URL = "https://github.com/jpedrosouza/asynqmon";
 
 function SettingRow({ title, description, children }: { title: string; description: ReactNode; children: ReactNode }) {
   return (
@@ -111,6 +113,22 @@ export function SettingsPage() {
               ))}
             </Select>
           </SettingRow>
+        </div>
+      </Card>
+      <Card title="About">
+        <div className="flex flex-col gap-3 text-sm">
+          <p className="text-kumo-subtle">
+            Web console for <Link href="https://github.com/hibiken/asynq">Asynq</Link>, based on the original asynqmon
+            by Ken Hibino and contributors. Released under the MIT License.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <LinkButton href={REPOSITORY_URL} target="_blank" size="sm" icon={GithubLogoIcon}>
+              Source code
+            </LinkButton>
+            <LinkButton href={`${REPOSITORY_URL}/issues`} target="_blank" size="sm" icon={BugIcon}>
+              Report an issue
+            </LinkButton>
+          </div>
         </div>
       </Card>
       {READ_ONLY && (
