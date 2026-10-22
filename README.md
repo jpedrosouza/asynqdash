@@ -1,107 +1,89 @@
 <img src="https://user-images.githubusercontent.com/11155743/114745460-57760500-9d57-11eb-9a2c-43fa88171807.png" alt="Asynqmon logo" width="360px" />
 
-# Web UI for monitoring & administering [Asynq](https://github.com/hibiken/asynq) task queue
+# Web UI for monitoring & administering [Asynq](https://github.com/hibiken/asynq) task queues
 
 ## Overview
 
-Asynqmon is a web UI tool for monitoring and administering [Asynq](https://github.com/hibiken/asynq) queues and tasks.
+Asynqmon is a web UI for monitoring and administering [Asynq](https://github.com/hibiken/asynq) queues and tasks.
 It supports integration with [Prometheus](https://prometheus.io) to display time-series data.
 
-Asynqmon is both a library that you can include in your web application, as well as a binary that you can simply install and run.
+Asynqmon is both a library that you can mount in your Go web application, and a binary that you can install and run.
 
-## Version Compatibility
+> **About this fork**
+>
+> This is an independently maintained fork of [hibiken/asynqmon](https://github.com/hibiken/asynqmon).
+> It ships a redesigned web UI and fixes for long-standing issues, while keeping the same Go API
+> (`asynqmon.New`, `asynqmon.Options`) and the same command-line flags. See [What's new](#whats-new-in-this-fork).
 
-Please make sure the version compatibility with the Asynq package you are using.
+## What's new in this fork
 
-| Asynq version  | WebUI (asynqmon) version |
-| -------------- | ------------------------ |
-| 0.23.x         | 0.7.x                    |
-| 0.22.x         | 0.6.x                    |
-| 0.20.x, 0.21.x | 0.5.x                    |
-| 0.19.x         | 0.4.x                    |
-| 0.18.x         | 0.2.x, 0.3.x             |
-| 0.16.x, 0.17.x | 0.1.x                    |
+**A new web UI**, rebuilt with React 19, [Kumo](https://github.com/cloudflare/kumo) components and TanStack Query:
+
+- Full-width, responsive layout with a collapsible sidebar that lists every queue and highlights retry/archived tasks.
+- Command palette (<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>K</kbd>) to jump to queues and pages, or look up a task ID across all queues.
+- Live indicator with pause/resume and "refresh now". Polling pauses while the browser tab is hidden.
+- Dashboard with totals, queue size by state, processed/failed history and a sortable, filterable queue table.
+- Queue page with stats, task-state tabs with counters, per-page filter, bulk actions on the selection or on every task,
+  and a quick task preview without leaving the list. The current tab and page are kept in the URL.
+- Confirmation before destructive or bulk actions. Deleting every task of a state requires typing the queue name.
+- Success and error notifications for every action (errors used to fail silently).
+- Task page with error banner, retry meter, timeline and full payload/result viewer (copy, download, line wrap).
+- Servers page with worker utilization, schedulers page with human-readable cron specs, enqueue history and "Run now",
+  Redis page with key metrics and a searchable INFO view.
+- Light/dark/system theme, local or UTC time zone, configurable refresh interval and page size.
+- Read-only mode hides every action.
+
+**Server-side improvements:**
+
+- Static assets are served with correct MIME types, gzip compression and long-term caching for fingerprinted files.
+- The embedded UI works on Windows (paths in `embed.FS` are always forward slashes).
+- Payloads with line breaks or tabs are displayed instead of being reported as "non-printable bytes".
+- New endpoints: `GET /api/health`, `GET /api/queues/{qname}/task_types` and `POST /api/scheduler_entries/{entry_id}:run`
+  (see [API additions](#api-additions)).
 
 ## Install the binary
 
-There're a few options to install the binary:
-
-- [Download a release binary](#release-binaries)
-- [Download a docker image](#docker-image)
-- [Build a binary from source](building-from-source)
-- [Build a docker image from source](#building-docker-image-locally)
-
 ### Release binaries
 
-You can download the release binary for your system from the [releases page](https://github.com/hibiken/asynqmon/releases).
+Download the release binary for your system from the [releases page](https://github.com/jpedrosouza/asynqmon/releases).
 
 ### Docker image
 
-To pull the Docker image:
-
 ```bash
-# Pull the latest image
-docker pull hibiken/asynqmon
-
-# Or specify the image by tag
-docker pull hibiken/asynqmon[:tag]
+docker pull ghcr.io/jpedrosouza/asynqmon:latest
 ```
 
 ### Building from source
 
-To build Asynqmon from source code, make sure you have Go installed ([download](https://golang.org/dl/)). Version `1.16` or higher is required. You also need [Node.js](https://nodejs.org/) and [Yarn](https://yarnpkg.com/) installed in order to build the frontend assets.
-
-Download the source code of this repository and then run:
+Requirements: [Go](https://golang.org/dl/) 1.21+ and [Node.js](https://nodejs.org/) 22+ (to build the UI).
 
 ```bash
 make build
 ```
 
-The `asynqmon` binary should be created in the current directory.
-
-### Building Docker image locally
-
-To build Docker image locally, run:
-
-```bash
-make docker
-```
+The `asynqmon` binary is created in the current directory. To build a Docker image instead, run `make docker`.
 
 ## Run the binary
 
-To use the defaults, simply run and open http://localhost:8080.
+To use the defaults, run it and open http://localhost:8080.
 
 ```bash
 # with a binary
 ./asynqmon
 
 # with a docker image
-docker run --rm \
-    --name asynqmon \
-    -p 8080:8080 \
-    hibiken/asynqmon
+docker run --rm --name asynqmon -p 8080:8080 ghcr.io/jpedrosouza/asynqmon
 ```
 
-By default, Asynqmon web server listens on port `8080` and connects to a Redis server running on `127.0.0.1:6379`.
+By default, the web server listens on port `8080` and connects to a Redis server at `127.0.0.1:6379`.
+Run `./asynqmon --help` to see every flag.
 
-To see all available flags, run:
-
-```bash
-# with a binary
-./asynqmon --help
-
-# with a docker image
-docker run hibiken/asynqmon --help
-```
-
-Here's the available flags:
-
-_Note_: Use `--redis-url` to specify address, db-number, and password with one flag value; Alternatively, use `--redis-addr`, `--redis-db`, and `--redis-password` to specify each value.
+_Note_: Use `--redis-url` to specify address, db number, and password with one flag value; alternatively, use `--redis-addr`, `--redis-db`, and `--redis-password` to specify each value.
 
 | Flag                              | Env                       | Description                                                                                                                  | Default          |
 | --------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | `--port`(int)                     | `PORT`                    | port number to use for web ui server                                                                                         | 8080             |
-| `---redis-url`(string)            | `REDIS_URL`               | URL to redis or sentinel server. See [godoc](https://pkg.go.dev/github.com/hibiken/asynq#ParseRedisURI) for supported format | ""               |
+| `--redis-url`(string)             | `REDIS_URL`               | URL to redis or sentinel server. See [godoc](https://pkg.go.dev/github.com/hibiken/asynq#ParseRedisURI) for supported format | ""               |
 | `--redis-addr`(string)            | `REDIS_ADDR`              | address of redis server to connect to                                                                                        | "127.0.0.1:6379" |
 | `--redis-db`(int)                 | `REDIS_DB`                | redis database number                                                                                                        | 0                |
 | `--redis-password`(string)        | `REDIS_PASSWORD`          | password to use when connecting to redis server                                                                              | ""               |
@@ -114,84 +96,43 @@ _Note_: Use `--redis-url` to specify address, db-number, and password with one f
 
 ### Connecting to Redis
 
-To connect to a **single redis server**, use either `--redis-url` or (`--redis-addr`, `--redis-db`, and `--redis-password`).
-
-Example:
+To connect to a **single redis server**, use either `--redis-url` or (`--redis-addr`, `--redis-db`, and `--redis-password`):
 
 ```sh
-$ ./asynqmon --redis-url=redis://:mypassword@localhost:6380/2
-
-$ ./asynqmon --redis-addr=localhost:6380 --redis-db=2 --redis-password=mypassword
+./asynqmon --redis-url=redis://:mypassword@localhost:6380/2
+./asynqmon --redis-addr=localhost:6380 --redis-db=2 --redis-password=mypassword
 ```
 
-To connect to **redis-sentinels**, use `--redis-url`.
-
-Example:
+To connect to **redis-sentinels**, use `--redis-url`:
 
 ```sh
-$ ./asynqmon --redis-url=redis-sentinel://:mypassword@localhost:5000,localhost:5001,localhost:5002?master=mymaster
+./asynqmon --redis-url=redis-sentinel://:mypassword@localhost:5000,localhost:5001,localhost:5002?master=mymaster
 ```
 
-To connect to a **redis-cluster**, use `--redis-cluster-nodes`.
-
-Example:
+To connect to a **redis-cluster**, use `--redis-cluster-nodes`:
 
 ```sh
-$ ./asynqmon --redis-cluster-nodes=localhost:7000,localhost:7001,localhost:7002,localhost:7003,localhost:7004,localhost:7006
+./asynqmon --redis-cluster-nodes=localhost:7000,localhost:7001,localhost:7002,localhost:7003,localhost:7004,localhost:7006
 ```
 
 ### Integration with Prometheus
 
-The binary supports two flags to enable integration with [Prometheus](https://prometheus.io/).
-
-First, enable metrics exporter to expose queue metrics to Prometheus server by passing `--enable-metrics-exporter` flag.
-The metrics data is now available under `/metrics` for Prometheus server to scrape.
-
-Once the metrics data is collected by a Prometheus server, you can pass the address of the Prometheus server to asynqmon to query the time-series data.
-The address can be specified via `--prometheus-addr`. This enables the metrics view on the Web UI.
-
-<img width="1532" alt="Screen Shot 2021-12-19 at 4 37 19 PM" src="https://user-images.githubusercontent.com/10953044/146696852-25916465-07f0-4ed5-af31-18be02390bcb.png">
-
-### Examples
+First, enable the metrics exporter with `--enable-metrics-exporter` so that queue metrics are exposed under `/metrics` for Prometheus to scrape.
+Then pass the address of the Prometheus server with `--prometheus-addr` to enable the Metrics page of the web UI.
 
 ```bash
-# with a local binary; custom port and connect to redis server at localhost:6380
-./asynqmon --port=3000 --redis-addr=localhost:6380
-
-# with prometheus integration enabled
 ./asynqmon --enable-metrics-exporter --prometheus-addr=http://localhost:9090
-
-# with Docker (connect to a Redis server running on the host machine)
-docker run --rm \
-    --name asynqmon \
-    -p 3000:3000 \
-    hibiken/asynqmon --port=3000 --redis-addr=host.docker.internal:6380
-
-# with Docker (connect to a Redis server running in the Docker container)
-docker run --rm \
-    --name asynqmon \
-    --network dev-network \
-    -p 8080:8080 \
-    hibiken/asynqmon --redis-addr=dev-redis:6379
 ```
 
-Next, go to [localhost:8080](http://localhost:8080) and see Asynqmon dashboard:
+## Import as a library
 
-![Web UI Queues View](https://user-images.githubusercontent.com/11155743/114697016-07327f00-9d26-11eb-808c-0ac841dc888e.png)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jpedrosouza/asynqmon.svg)](https://pkg.go.dev/github.com/jpedrosouza/asynqmon)
 
-**Tasks view**
+```bash
+go get github.com/jpedrosouza/asynqmon
+```
 
-![Web UI TasksView](https://user-images.githubusercontent.com/11155743/114697070-1f0a0300-9d26-11eb-855c-d3ec263865b7.png)
-
-**Settings and adaptive dark mode**
-
-![Web UI Settings and adaptive dark mode](https://user-images.githubusercontent.com/11155743/114697149-3517c380-9d26-11eb-9f7a-ae2dd00aad5b.png)
-
-## Import as a Library
-
-[![GoDoc](https://godoc.org/github.com/hibiken/asynqmon?status.svg)](https://godoc.org/github.com/hibiken/asynqmon)
-
-Asynqmon is also a library which can be imported into an existing web application.
+Projects that already use `github.com/hibiken/asynqmon` only need to change the import path: the API is the same.
 
 Example with [net/http](https://pkg.go.dev/net/http):
 
@@ -203,16 +144,16 @@ import (
 	"net/http"
 
 	"github.com/hibiken/asynq"
-	"github.com/hibiken/asynqmon"
+	"github.com/jpedrosouza/asynqmon"
 )
 
 func main() {
 	h := asynqmon.New(asynqmon.Options{
-		RootPath: "/monitoring", // RootPath specifies the root for asynqmon app
+		RootPath:     "/monitoring", // RootPath specifies the root for asynqmon app
 		RedisConnOpt: asynq.RedisClientOpt{Addr: ":6379"},
 	})
 
-    // Note: We need the tailing slash when using net/http.ServeMux.
+	// Note: We need the trailing slash when using net/http.ServeMux.
 	http.Handle(h.RootPath()+"/", h)
 
 	// Go to http://localhost:8080/monitoring to see asynqmon homepage.
@@ -223,65 +164,66 @@ func main() {
 Example with [gorilla/mux](https://pkg.go.dev/github.com/gorilla/mux):
 
 ```go
-package main
+h := asynqmon.New(asynqmon.Options{
+	RootPath:     "/monitoring",
+	RedisConnOpt: asynq.RedisClientOpt{Addr: ":6379"},
+})
 
-import (
-	"log"
-	"net/http"
-
-	"github.com/gorilla/mux"
-	"github.com/hibiken/asynq"
-	"github.com/hibiken/asynqmon"
-)
-
-func main() {
-	h := asynqmon.New(asynqmon.Options{
-		RootPath: "/monitoring", // RootPath specifies the root for asynqmon app
-		RedisConnOpt: asynq.RedisClientOpt{Addr: ":6379"},
-	})
-
-	r := mux.NewRouter()
-	r.PathPrefix(h.RootPath()).Handler(h)
-
-	srv := &http.Server{
-		Handler: r,
-		Addr:    ":8080",
-	}
-
-	// Go to http://localhost:8080/monitoring to see asynqmon homepage.
-	log.Fatal(srv.ListenAndServe())
-}
+r := mux.NewRouter()
+r.PathPrefix(h.RootPath()).Handler(h)
+log.Fatal(http.ListenAndServe(":8080", r))
 ```
 
-Example with [labstack/echo](https://github.com/labstack/echo)):
-
+Example with [labstack/echo](https://github.com/labstack/echo):
 
 ```go
-package main
+e := echo.New()
+mon := asynqmon.New(asynqmon.Options{
+	RootPath:     "/monitoring/tasks",
+	RedisConnOpt: asynq.RedisClientOpt{Addr: ":6379"},
+})
+e.Any("/monitoring/tasks/*", echo.WrapHandler(mon))
+e.Start(":8080")
+```
 
-import (
-	"github.com/labstack/echo/v4"
-	"github.com/hibiken/asynq"
-	"github.com/hibiken/asynqmon"
-)
+### Theming
 
-func main() {
-        e := echo.New()
+The UI uses Kumo design tokens, so the whole console can be re-branded from CSS. To change the accent color,
+override the brand token in `ui/src/app.css` and rebuild the UI with `make assets`:
 
-	mon := asynqmon.New(asynqmon.Options{
-		RootPath: "/monitoring/tasks",
-		RedisConnOpt: asynq.RedisClientOpt{
-			Addr: ":6379",
-			Password: "",
-			DB: 0,
-		},
-	})
-	e.Any("/monitoring/tasks/*", echo.WrapHandler(mon))
-	e.Start(":8080")
+```css
+:root {
+  --color-kumo-brand: #7c3aed;
 }
 ```
 
+## API additions
+
+These endpoints are available under `{RootPath}/api`, in addition to the ones used by the UI:
+
+| Method | Path                                    | Description                                                                                                                                                                                   |
+| ------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/health`                               | `200 {"status":"ok"}` when Redis is reachable, `503` otherwise. Suitable for liveness/readiness probes.                                                                                       |
+| `GET`  | `/queues/{qname}/task_types`            | Number of tasks of each type in the queue, by state. Large queues are sampled (up to 10,000 tasks per state); the response reports whether the counts were truncated.                         |
+| `POST` | `/scheduler_entries/{entry_id}:run`     | Enqueues the task of a periodic scheduler entry right away, with the entry's payload and options. The regular schedule is not affected. Disabled in read-only mode, like every non-GET call. |
+
+## Development
+
+```bash
+# Terminal 1: run the API server (without rebuilding the UI) against a local Redis
+make api && ./api --redis-addr=localhost:6379
+
+# Terminal 2: run the UI dev server with hot reload on http://localhost:3000
+cd ui && npm ci && npm run dev
+```
+
+The dev server proxies `/api` to `http://localhost:8080` (set `ASYNQMON_API` to use another address).
+
+The built UI in `ui/build` is embedded into the Go package and committed to the repository, so that `go get` users
+don't need Node.js. After changing the UI, run `make assets` and commit `ui/build`. CI fails if it is out of date.
+
+Useful commands: `npm run typecheck`, `npm run format`, `make test`.
 
 ## License
 
-Copyright (c) 2019-present [Ken Hibino](https://github.com/hibiken) and [Contributors](https://github.com/hibiken/asynqmon/graphs/contributors). `Asynqmon` is free and open-source software licensed under the [MIT License](https://github.com/hibiken/asynq/blob/master/LICENSE). Official logo was created by [Vic Shóstak](https://github.com/koddr) and distributed under [Creative Commons](https://creativecommons.org/publicdomain/zero/1.0/) license (CC0 1.0 Universal).
+Copyright (c) 2019-present [Ken Hibino](https://github.com/hibiken) and [Contributors](https://github.com/hibiken/asynqmon/graphs/contributors). `Asynqmon` is free and open-source software licensed under the [MIT License](LICENSE). Official logo was created by [Vic Shóstak](https://github.com/koddr) and distributed under [Creative Commons](https://creativecommons.org/publicdomain/zero/1.0/) license (CC0 1.0 Universal).

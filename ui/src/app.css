@@ -1,0 +1,89 @@
+@source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "@cloudflare/kumo/styles";
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/*
+ * Theme overrides.
+ * Embedders can re-brand the console by overriding these tokens in their own
+ * stylesheet, e.g. `:root { --color-kumo-brand: #7c3aed; }`.
+ */
+:root {
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-kumo-canvas text-kumo-default antialiased;
+}
+
+/* Tabular numbers keep counters from jittering while polling. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lightweight JSON syntax highlighting used by <JsonView>. */
+.json-key {
+  @apply text-kumo-link;
+}
+.json-string {
+  @apply text-kumo-success;
+}
+.json-number {
+  @apply text-kumo-warning;
+}
+.json-literal {
+  @apply text-kumo-danger;
+}
+
+/* Short, subtle entrance used for content that appears after a user action. */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 160ms ease-out both;
+}
+
+/* Counter flash when a live value changes. */
+@keyframes value-flash {
+  from {
+    background-color: color-mix(in oklch, var(--color-kumo-brand) 18%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.animate-value-flash {
+  animation: value-flash 900ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

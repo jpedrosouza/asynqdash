@@ -65,17 +65,18 @@ func New(opts Options) *HTTPHandler {
 		panic(fmt.Sprintf("asnyqmon.New: unsupported RedisConnOpt type %T", opts.RedisConnOpt))
 	}
 	i := asynq.NewInspector(opts.RedisConnOpt)
+	c := asynq.NewClient(opts.RedisConnOpt)
 
 	// Make sure that RootPath starts with a slash if provided.
 	if opts.RootPath != "" && !strings.HasPrefix(opts.RootPath, "/") {
-		panic(fmt.Sprintf("asynqmon.New: RootPath must start with a slash"))
+		panic("asynqmon.New: RootPath must start with a slash")
 	}
 	// Remove tailing slash from RootPath.
 	opts.RootPath = strings.TrimSuffix(opts.RootPath, "/")
 
 	return &HTTPHandler{
-		router:   muxRouter(opts, rc, i),
-		closers:  []func() error{rc.Close, i.Close},
+		router:   muxRouter(opts, rc, i, c),
+		closers:  []func() error{rc.Close, i.Close, c.Close},
 		rootPath: opts.RootPath,
 	}
 }
@@ -99,7 +100,7 @@ func (h *HTTPHandler) RootPath() string {
 //go:embed ui/build/*
 var staticContents embed.FS
 
-func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspector) *mux.Router {
+func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspector, client *asynq.Client) *mux.Router {
 	router := mux.NewRouter().PathPrefix(opts.RootPath).Subrouter()
 
 	var payloadFmt PayloadFormatter = DefaultPayloadFormatter
@@ -114,6 +115,9 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 
 	api := router.PathPrefix("/api").Subrouter()
 
+	// Health check endpoint.
+	api.HandleFunc("/health", newHealthHandlerFunc(rc)).Methods("GET")
+
 	// Queue endpoints.
 	api.HandleFunc("/queues", newListQueuesHandlerFunc(inspector)).Methods("GET")
 	api.HandleFunc("/queues/{qname}", newGetQueueHandlerFunc(inspector)).Methods("GET")
@@ -123,6 +127,9 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 
 	// Queue Historical Stats endpoint.
 	api.HandleFunc("/queue_stats", newListQueueStatsHandlerFunc(inspector)).Methods("GET")
+
+	// Task type breakdown endpoint.
+	api.HandleFunc("/queues/{qname}/task_types", newListTaskTypesHandlerFunc(inspector)).Methods("GET")
 
 	// Task endpoints.
 	api.HandleFunc("/queues/{qname}/active_tasks", newListActiveTasksHandlerFunc(inspector, payloadFmt)).Methods("GET")
@@ -195,6 +202,7 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 	// Scheduler Entry endpoints.
 	api.HandleFunc("/scheduler_entries", newListSchedulerEntriesHandlerFunc(inspector, payloadFmt)).Methods("GET")
 	api.HandleFunc("/scheduler_entries/{entry_id}/enqueue_events", newListSchedulerEnqueueEventsHandlerFunc(inspector)).Methods("GET")
+	api.HandleFunc("/scheduler_entries/{entry_id}:run", newRunSchedulerEntryHandlerFunc(inspector, client)).Methods("POST")
 
 	// Redis info endpoint.
 	switch c := rc.(type) {

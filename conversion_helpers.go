@@ -42,6 +42,9 @@ func (f ResultFormatterFunc) FormatResult(taskType string, result []byte) string
 // It prints the given payload bytes as is if the bytes are printable, otherwise it prints a message to indicate
 // that the bytes are not printable.
 var DefaultPayloadFormatter = PayloadFormatterFunc(func(_ string, payload []byte) string {
+	if len(payload) == 0 {
+		return ""
+	}
 	if !isPrintable(payload) {
 		return "non-printable bytes"
 	}
@@ -52,6 +55,9 @@ var DefaultPayloadFormatter = PayloadFormatterFunc(func(_ string, payload []byte
 // It prints the given result bytes as is if the bytes are printable, otherwise it prints a message to indicate
 // that the bytes are not printable.
 var DefaultResultFormatter = ResultFormatterFunc(func(_ string, result []byte) string {
+	if len(result) == 0 {
+		return ""
+	}
 	if !isPrintable(result) {
 		return "non-printable bytes"
 	}
@@ -59,13 +65,15 @@ var DefaultResultFormatter = ResultFormatterFunc(func(_ string, result []byte) s
 })
 
 // isPrintable reports whether the given data is comprised of all printable runes.
+// Line breaks and tabs are considered printable so that multi-line payloads
+// (e.g. pretty-printed JSON) are displayed as is.
 func isPrintable(data []byte) bool {
 	if !utf8.Valid(data) {
 		return false
 	}
 	isAllSpace := true
 	for _, r := range string(data) {
-		if !unicode.IsPrint(r) {
+		if !unicode.IsPrint(r) && r != '\n' && r != '\r' && r != '\t' {
 			return false
 		}
 		if !unicode.IsSpace(r) {
