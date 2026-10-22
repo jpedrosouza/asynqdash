@@ -6,7 +6,6 @@ import {
   ClockCountdownIcon,
   DatabaseIcon,
   GearSixIcon,
-  GithubLogoIcon,
   HardDrivesIcon,
   ListIcon,
   MagnifyingGlassIcon,
@@ -100,17 +99,10 @@ function AppSidebar() {
         </Sidebar.Group>
         <QueueNavList />
       </Sidebar.Content>
+      {/* Kumo's footer is a fixed-height bar that fits a single item. */}
       <Sidebar.Footer>
-        <Sidebar.Menu>
+        <Sidebar.Menu className="w-full">
           <NavItem to={paths.settings} icon={GearSixIcon} label="Settings" />
-          <Sidebar.MenuButton
-            href="https://github.com/jpedrosouza/asynqmon/issues"
-            target="_blank"
-            icon={GithubLogoIcon}
-            tooltip="Report an issue"
-          >
-            Report an issue
-          </Sidebar.MenuButton>
         </Sidebar.Menu>
       </Sidebar.Footer>
     </Sidebar>
@@ -120,7 +112,7 @@ function AppSidebar() {
 function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
   const { toggleSidebar } = useSidebar();
   return (
-    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-kumo-hairline bg-kumo-canvas/85 px-3 backdrop-blur md:px-4">
+    <header className="sticky top-0 z-20 flex h-[58px] shrink-0 items-center gap-2 border-b border-kumo-hairline bg-kumo-canvas/85 px-3 backdrop-blur md:px-4">
       <Tooltip
         content="Toggle sidebar"
         render={

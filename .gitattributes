@@ -4,6 +4,9 @@ ui/src/** text eol=lf
 ui/index.html text eol=lf
 ui/*.json text eol=lf
 ui/*.ts text eol=lf
+ui/public/*.md text eol=lf
+ui/public/*.json text eol=lf
+ui/public/*.txt text eol=lf
 
 # Generated assets are committed as produced by the build.
 ui/build/** -text

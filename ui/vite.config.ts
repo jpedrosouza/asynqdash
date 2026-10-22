@@ -33,6 +33,9 @@ export default defineConfig(({ command }) => ({
     outDir: "build",
     emptyOutDir: true,
     sourcemap: false,
+    // Minification strips license comments, so the licenses of bundled packages
+    // are collected into a file shipped with the build (and the Go binary).
+    license: { fileName: "THIRD_PARTY_LICENSES.md" },
     // Dynamic imports would bake the placeholder base into JS files, which are
     // not templated by the server, so preload helpers are disabled.
     modulePreload: false,
