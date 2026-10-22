@@ -27,8 +27,8 @@ node_modules/
 *.out
 
 # binaries
-/cmd/asynqmon/asynqmon
-/asynqmon
+/cmd/asynqdash/asynqdash
+/asynqdash
 /api
 dist/
 

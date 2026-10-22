@@ -1,4 +1,4 @@
-package asynqmon
+package asynqdash
 
 import (
 	"embed"
@@ -14,7 +14,7 @@ import (
 // Options are used to configure HTTPHandler.
 type Options struct {
 	// URL path the handler is responsible for.
-	// The path is used for the homepage of asynqmon, and every other page is rooted in this subtree.
+	// The path is used for the homepage of asynqdash, and every other page is rooted in this subtree.
 	//
 	// This field is optional. Default is "/".
 	RootPath string
@@ -36,7 +36,7 @@ type Options struct {
 
 	// PrometheusAddress specifies the address of the Prometheus to connect to.
 	//
-	// This field is optional. If this field is set, asynqmon will query the Prometheus server
+	// This field is optional. If this field is set, asynqdash will query the Prometheus server
 	// to get the time series data about queue metrics and show them in the web UI.
 	PrometheusAddress string
 
@@ -44,7 +44,7 @@ type Options struct {
 	ReadOnly bool
 }
 
-// HTTPHandler is a http.Handler for asynqmon application.
+// HTTPHandler is a http.Handler for asynqdash application.
 type HTTPHandler struct {
 	router   *mux.Router
 	closers  []func() error
@@ -58,7 +58,7 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // New creates a HTTPHandler with the given options.
 func New(opts Options) *HTTPHandler {
 	if opts.RedisConnOpt == nil {
-		panic("asynqmon.New: RedisConnOpt field is required")
+		panic("asynqdash.New: RedisConnOpt field is required")
 	}
 	rc, ok := opts.RedisConnOpt.MakeRedisClient().(redis.UniversalClient)
 	if !ok {
@@ -69,7 +69,7 @@ func New(opts Options) *HTTPHandler {
 
 	// Make sure that RootPath starts with a slash if provided.
 	if opts.RootPath != "" && !strings.HasPrefix(opts.RootPath, "/") {
-		panic("asynqmon.New: RootPath must start with a slash")
+		panic("asynqdash.New: RootPath must start with a slash")
 	}
 	// Remove tailing slash from RootPath.
 	opts.RootPath = strings.TrimSuffix(opts.RootPath, "/")
@@ -91,7 +91,7 @@ func (h *HTTPHandler) Close() error {
 	return nil
 }
 
-// RootPath returns the root URL path used for asynqmon application.
+// RootPath returns the root URL path used for asynqdash application.
 // Returned path string does not have the trailing slash.
 func (h *HTTPHandler) RootPath() string {
 	return h.rootPath

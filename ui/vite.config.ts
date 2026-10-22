@@ -7,12 +7,12 @@ import tailwindcss from "@tailwindcss/vite";
 // base so that CSS and JS reference each other relative to their own URL, and
 // only the entry tags in index.html are rewritten to the RootPath placeholder,
 // which the Go server fills in at runtime. This keeps the UI working when
-// asynqmon is mounted under any sub-path.
+// asynqdash is mounted under any sub-path.
 const ROOT_PATH_PLACEHOLDER = "/[[.RootPath]]";
 
 function goTemplateRootPath(): Plugin {
   return {
-    name: "asynqmon-go-template-root-path",
+    name: "asynqdash-go-template-root-path",
     apply: "build",
     transformIndexHtml: {
       order: "post",

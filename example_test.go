@@ -1,19 +1,19 @@
-package asynqmon_test
+package asynqdash_test
 
 import (
 	"log"
 	"net/http"
 
 	"github.com/hibiken/asynq"
-	"github.com/jpedrosouza/asynqmon"
+	"github.com/jpedrosouza/asynqdash"
 )
 
 func ExampleHTTPHandler() {
-	h := asynqmon.New(asynqmon.Options{
+	h := asynqdash.New(asynqdash.Options{
 		RootPath:     "/monitoring",
 		RedisConnOpt: asynq.RedisClientOpt{Addr: ":6379"},
 	})
 
 	http.Handle(h.RootPath(), h)
-	log.Fatal(http.ListenAndServe(":8000", nil)) // visit localhost:8000/monitoring to see asynqmon homepage
+	log.Fatal(http.ListenAndServe(":8000", nil)) // visit localhost:8000/monitoring to see asynqdash homepage
 }

@@ -47,12 +47,12 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
-          bin=asynqmon
-          if [ "$GOOS" = "windows" ]; then bin=asynqmon.exe; fi
-          go build -trimpath -ldflags="-s -w" -o "$bin" ./cmd/asynqmon
-          tar -czvf "asynqmon_${TAG}_${GOOS}_${GOARCH}.tar.gz" "$bin" LICENSE README.md
+          bin=asynqdash
+          if [ "$GOOS" = "windows" ]; then bin=asynqdash.exe; fi
+          go build -trimpath -ldflags="-s -w" -o "$bin" ./cmd/asynqdash
+          tar -czvf "asynqdash_${TAG}_${GOOS}_${GOARCH}.tar.gz" "$bin" LICENSE README.md
 
       - name: Upload release binary
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" "asynqmon_${TAG}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz" --clobber
+        run: gh release upload "$TAG" "asynqdash_${TAG}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz" --clobber

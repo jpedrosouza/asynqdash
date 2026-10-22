@@ -1,4 +1,4 @@
-package asynqmon
+package asynqdash
 
 import (
 	"encoding/json"

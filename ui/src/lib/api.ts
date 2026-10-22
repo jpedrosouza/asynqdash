@@ -36,7 +36,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError(0, "Could not reach the asynqmon server. Check your network connection.");
+    throw new ApiError(0, "Could not reach the asynqdash server. Check your network connection.");
   }
   if (!resp.ok) {
     const text = (await resp.text()).trim();

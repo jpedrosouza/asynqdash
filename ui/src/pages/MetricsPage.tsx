@@ -151,7 +151,7 @@ export function MetricsPage() {
         <Empty
           icon={<ChartLineIcon size={32} />}
           title="Prometheus is not configured"
-          description="Start asynqmon with --prometheus-addr (or set Options.PrometheusAddress) to see time series metrics."
+          description="Start asynqdash with --prometheus-addr (or set Options.PrometheusAddress) to see time series metrics."
         />
       </Page>
     );

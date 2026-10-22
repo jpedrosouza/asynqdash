@@ -1,4 +1,4 @@
-// Types mirroring the JSON responses of the asynqmon API (see conversion_helpers.go).
+// Types mirroring the JSON responses of the asynqdash API (see conversion_helpers.go).
 
 export type TaskState = "active" | "pending" | "aggregating" | "scheduled" | "retry" | "archived" | "completed";
 

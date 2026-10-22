@@ -17,6 +17,17 @@
 :root {
   font-family: var(--font-sans);
   font-feature-settings: "cv11", "ss01";
+
+  /* Asynqdash logo colors. */
+  --logo-accent: #3d5afe;
+  --logo-dot: #00a88e;
+  --logo-dash: #3d5afe;
+}
+
+[data-mode="dark"] {
+  --logo-accent: #7088ff;
+  --logo-dot: #2ee6c7;
+  --logo-dash: #8ea0ff;
 }
 
 html,
