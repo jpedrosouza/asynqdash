@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-22
+
 This release starts the independently maintained fork (`github.com/jpedrosouza/asynqmon`).
 
 ### Changed
@@ -39,6 +41,7 @@ This release starts the independently maintained fork (`github.com/jpedrosouza/a
 - (ui): Error rate sorting was broken for queues without processed tasks.
 - (ui): Chart tooltips ignored dark mode.
 - (cmd): Test expectation for redis-sentinel URLs.
+- (ui): Third-party license notices are shipped with the UI build (`THIRD_PARTY_LICENSES.md`, `NOTICES.md`).
 
 ## [0.7.0] - 2022-04-11
 
