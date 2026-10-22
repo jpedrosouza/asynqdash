@@ -14,7 +14,7 @@ import { Card, Page, PageHeader } from "../components/common";
 
 const POLL_OPTIONS = [2, 5, 10, 15, 30, 60];
 
-const REPOSITORY_URL = "https://github.com/jpedrosouza/asynqmon";
+const REPOSITORY_URL = "https://github.com/jpedrosouza/asynqdash";
 
 function SettingRow({ title, description, children }: { title: string; description: ReactNode; children: ReactNode }) {
   return (
@@ -118,8 +118,9 @@ export function SettingsPage() {
       <Card title="About">
         <div className="flex flex-col gap-3 text-sm">
           <p className="text-kumo-subtle">
-            Web console for <Link href="https://github.com/hibiken/asynq">Asynq</Link>, based on the original asynqmon
-            by Ken Hibino and contributors. Released under the MIT License.
+            Asynqdash is a web console for <Link href="https://github.com/hibiken/asynq">Asynq</Link>. It started as a
+            fork of <Link href="https://github.com/hibiken/asynqmon">asynqmon</Link> by Ken Hibino and contributors, and
+            is not affiliated with the Asynq project. Released under the MIT License.
           </p>
           <div className="flex flex-wrap gap-2">
             <LinkButton href={REPOSITORY_URL} target="_blank" size="sm" icon={GithubLogoIcon}>

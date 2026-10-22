@@ -17,7 +17,9 @@ export interface Settings {
   dailyStatsRange: DailyStatsRange;
 }
 
-const STORAGE_KEY = "asynqmon:settings";
+const STORAGE_KEY = "asynqdash:settings";
+// Key used before the project was renamed; read once so saved preferences carry over.
+const LEGACY_STORAGE_KEY = "asynqmon:settings";
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
@@ -33,7 +35,7 @@ export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 function loadSettings(): Settings {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
     return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
   } catch {

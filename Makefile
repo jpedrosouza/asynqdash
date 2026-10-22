@@ -8,10 +8,10 @@ assets:
 # This target skips the overhead of building UI assets.
 # Intended to be used during development.
 api:
-	go build -o api ./cmd/asynqmon
+	go build -o api ./cmd/asynqdash
 
 # Start the UI dev server on http://localhost:3000.
-# It proxies API requests to an asynqmon server on http://localhost:8080 (see `make api`).
+# It proxies API requests to an asynqdash server on http://localhost:8080 (see `make api`).
 ui-dev:
 	cd ./ui && npm run dev
 
@@ -21,12 +21,12 @@ test:
 
 # Build a release binary.
 build: assets
-	go build -o asynqmon ./cmd/asynqmon
+	go build -o asynqdash ./cmd/asynqdash
 
-# Build image and run Asynqmon server (with default settings).
+# Build image and run Asynqdash server (with default settings).
 docker:
-	docker build -t asynqmon .
+	docker build -t asynqdash .
 	docker run --rm \
-		--name asynqmon \
+		--name asynqdash \
 		-p 8080:8080 \
-		asynqmon --redis-addr=host.docker.internal:6379
+		asynqdash --redis-addr=host.docker.internal:6379

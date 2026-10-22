@@ -41,7 +41,7 @@ func TestParseFlags(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
-			cfg, output, err := parseFlags("asynqmon", tc.args)
+			cfg, output, err := parseFlags("asynqdash", tc.args)
 			if err != nil {
 				t.Errorf("parseFlags returned error: %v", err)
 			}

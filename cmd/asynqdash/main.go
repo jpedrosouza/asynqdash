@@ -14,7 +14,7 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/hibiken/asynq/x/metrics"
-	"github.com/jpedrosouza/asynqmon"
+	"github.com/jpedrosouza/asynqdash"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
@@ -147,10 +147,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	h := asynqmon.New(asynqmon.Options{
+	h := asynqdash.New(asynqdash.Options{
 		RedisConnOpt:      redisConnOpt,
-		PayloadFormatter:  asynqmon.PayloadFormatterFunc(payloadFormatterFunc(cfg)),
-		ResultFormatter:   asynqmon.ResultFormatterFunc(resultFormatterFunc(cfg)),
+		PayloadFormatter:  asynqdash.PayloadFormatterFunc(payloadFormatterFunc(cfg)),
+		ResultFormatter:   asynqdash.ResultFormatterFunc(resultFormatterFunc(cfg)),
 		PrometheusAddress: cfg.PrometheusServerAddr,
 		ReadOnly:          cfg.ReadOnly,
 	})
@@ -183,20 +183,20 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 	}
 
-	fmt.Printf("Asynq Monitoring WebUI server is listening on port %d\n", cfg.Port)
+	fmt.Printf("Asynqdash is listening on port %d\n", cfg.Port)
 	log.Fatal(srv.ListenAndServe())
 }
 
 func payloadFormatterFunc(cfg *Config) func(string, []byte) string {
 	return func(taskType string, payload []byte) string {
-		payloadStr := asynqmon.DefaultPayloadFormatter.FormatPayload(taskType, payload)
+		payloadStr := asynqdash.DefaultPayloadFormatter.FormatPayload(taskType, payload)
 		return truncate(payloadStr, cfg.MaxPayloadLength)
 	}
 }
 
 func resultFormatterFunc(cfg *Config) func(string, []byte) string {
 	return func(taskType string, result []byte) string {
-		resultStr := asynqmon.DefaultResultFormatter.FormatResult(taskType, result)
+		resultStr := asynqdash.DefaultResultFormatter.FormatResult(taskType, result)
 		return truncate(resultStr, cfg.MaxResultLength)
 	}
 }

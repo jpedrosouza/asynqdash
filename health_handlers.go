@@ -1,4 +1,4 @@
-package asynqmon
+package asynqdash
 
 import (
 	"context"
@@ -20,7 +20,7 @@ type healthResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
-// newHealthHandlerFunc returns a handler that reports whether asynqmon can reach redis.
+// newHealthHandlerFunc returns a handler that reports whether asynqdash can reach redis.
 // It responds with 200 when redis is reachable and 503 otherwise, so it can be used
 // as a liveness/readiness probe.
 func newHealthHandlerFunc(rc redis.UniversalClient) http.HandlerFunc {

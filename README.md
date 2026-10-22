@@ -1,21 +1,26 @@
-<img src="https://user-images.githubusercontent.com/11155743/114745460-57760500-9d57-11eb-9a2c-43fa88171807.png" alt="Asynqmon logo" width="360px" />
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo/asynqdash-logo-dark.svg">
+    <img src="docs/logo/asynqdash-logo.svg" alt="Asynqdash" width="320">
+  </picture>
+</p>
 
-# Web UI for monitoring & administering [Asynq](https://github.com/hibiken/asynq) task queues
+# Web console for monitoring & administering [Asynq](https://github.com/hibiken/asynq) task queues
 
 ## Overview
 
-Asynqmon is a web UI for monitoring and administering [Asynq](https://github.com/hibiken/asynq) queues and tasks.
+Asynqdash is a web UI for monitoring and administering [Asynq](https://github.com/hibiken/asynq) queues and tasks.
 It supports integration with [Prometheus](https://prometheus.io) to display time-series data.
 
-Asynqmon is both a library that you can mount in your Go web application, and a binary that you can install and run.
+Asynqdash is both a library that you can mount in your Go web application, and a binary that you can install and run.
 
-> **About this fork**
+> **About the project**
 >
-> This is an independently maintained fork of [hibiken/asynqmon](https://github.com/hibiken/asynqmon).
-> It ships a redesigned web UI and fixes for long-standing issues, while keeping the same Go API
-> (`asynqmon.New`, `asynqmon.Options`) and the same command-line flags. See [What's new](#whats-new-in-this-fork).
+> Asynqdash started as a fork of [hibiken/asynqmon](https://github.com/hibiken/asynqmon) and is maintained independently.
+> It ships a redesigned web UI and fixes for long-standing issues, and keeps asynqmon's Go API shape
+> (`New`, `Options`) and command-line flags. It is not affiliated with or endorsed by the Asynq project.
 
-## What's new in this fork
+## What's new compared to asynqmon
 
 **A new web UI**, rebuilt with React 19, [Kumo](https://github.com/cloudflare/kumo) components and TanStack Query:
 
@@ -45,12 +50,12 @@ Asynqmon is both a library that you can mount in your Go web application, and a 
 
 ### Release binaries
 
-Download the release binary for your system from the [releases page](https://github.com/jpedrosouza/asynqmon/releases).
+Download the release binary for your system from the [releases page](https://github.com/jpedrosouza/asynqdash/releases).
 
 ### Docker image
 
 ```bash
-docker pull ghcr.io/jpedrosouza/asynqmon:latest
+docker pull ghcr.io/jpedrosouza/asynqdash:latest
 ```
 
 ### Building from source
@@ -61,7 +66,7 @@ Requirements: [Go](https://golang.org/dl/) 1.21+ and [Node.js](https://nodejs.or
 make build
 ```
 
-The `asynqmon` binary is created in the current directory. To build a Docker image instead, run `make docker`.
+The `asynqdash` binary is created in the current directory. To build a Docker image instead, run `make docker`.
 
 ## Run the binary
 
@@ -69,14 +74,14 @@ To use the defaults, run it and open http://localhost:8080.
 
 ```bash
 # with a binary
-./asynqmon
+./asynqdash
 
 # with a docker image
-docker run --rm --name asynqmon -p 8080:8080 ghcr.io/jpedrosouza/asynqmon
+docker run --rm --name asynqdash -p 8080:8080 ghcr.io/jpedrosouza/asynqdash
 ```
 
 By default, the web server listens on port `8080` and connects to a Redis server at `127.0.0.1:6379`.
-Run `./asynqmon --help` to see every flag.
+Run `./asynqdash --help` to see every flag.
 
 _Note_: Use `--redis-url` to specify address, db number, and password with one flag value; alternatively, use `--redis-addr`, `--redis-db`, and `--redis-password` to specify each value.
 
@@ -99,20 +104,20 @@ _Note_: Use `--redis-url` to specify address, db number, and password with one f
 To connect to a **single redis server**, use either `--redis-url` or (`--redis-addr`, `--redis-db`, and `--redis-password`):
 
 ```sh
-./asynqmon --redis-url=redis://:mypassword@localhost:6380/2
-./asynqmon --redis-addr=localhost:6380 --redis-db=2 --redis-password=mypassword
+./asynqdash --redis-url=redis://:mypassword@localhost:6380/2
+./asynqdash --redis-addr=localhost:6380 --redis-db=2 --redis-password=mypassword
 ```
 
 To connect to **redis-sentinels**, use `--redis-url`:
 
 ```sh
-./asynqmon --redis-url=redis-sentinel://:mypassword@localhost:5000,localhost:5001,localhost:5002?master=mymaster
+./asynqdash --redis-url=redis-sentinel://:mypassword@localhost:5000,localhost:5001,localhost:5002?master=mymaster
 ```
 
 To connect to a **redis-cluster**, use `--redis-cluster-nodes`:
 
 ```sh
-./asynqmon --redis-cluster-nodes=localhost:7000,localhost:7001,localhost:7002,localhost:7003,localhost:7004,localhost:7006
+./asynqdash --redis-cluster-nodes=localhost:7000,localhost:7001,localhost:7002,localhost:7003,localhost:7004,localhost:7006
 ```
 
 ### Integration with Prometheus
@@ -121,18 +126,18 @@ First, enable the metrics exporter with `--enable-metrics-exporter` so that queu
 Then pass the address of the Prometheus server with `--prometheus-addr` to enable the Metrics page of the web UI.
 
 ```bash
-./asynqmon --enable-metrics-exporter --prometheus-addr=http://localhost:9090
+./asynqdash --enable-metrics-exporter --prometheus-addr=http://localhost:9090
 ```
 
 ## Import as a library
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/jpedrosouza/asynqmon.svg)](https://pkg.go.dev/github.com/jpedrosouza/asynqmon)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jpedrosouza/asynqdash.svg)](https://pkg.go.dev/github.com/jpedrosouza/asynqdash)
 
 ```bash
-go get github.com/jpedrosouza/asynqmon
+go get github.com/jpedrosouza/asynqdash
 ```
 
-Projects that already use `github.com/hibiken/asynqmon` only need to change the import path: the API is the same.
+Projects that use `github.com/hibiken/asynqmon` can switch by changing the import path and the package name (`asynqmon.New` → `asynqdash.New`); the options are the same.
 
 Example with [net/http](https://pkg.go.dev/net/http):
 
@@ -144,19 +149,19 @@ import (
 	"net/http"
 
 	"github.com/hibiken/asynq"
-	"github.com/jpedrosouza/asynqmon"
+	"github.com/jpedrosouza/asynqdash"
 )
 
 func main() {
-	h := asynqmon.New(asynqmon.Options{
-		RootPath:     "/monitoring", // RootPath specifies the root for asynqmon app
+	h := asynqdash.New(asynqdash.Options{
+		RootPath:     "/monitoring", // RootPath specifies the root for the asynqdash app
 		RedisConnOpt: asynq.RedisClientOpt{Addr: ":6379"},
 	})
 
 	// Note: We need the trailing slash when using net/http.ServeMux.
 	http.Handle(h.RootPath()+"/", h)
 
-	// Go to http://localhost:8080/monitoring to see asynqmon homepage.
+	// Go to http://localhost:8080/monitoring to see the asynqdash homepage.
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 ```
@@ -164,7 +169,7 @@ func main() {
 Example with [gorilla/mux](https://pkg.go.dev/github.com/gorilla/mux):
 
 ```go
-h := asynqmon.New(asynqmon.Options{
+h := asynqdash.New(asynqdash.Options{
 	RootPath:     "/monitoring",
 	RedisConnOpt: asynq.RedisClientOpt{Addr: ":6379"},
 })
@@ -178,7 +183,7 @@ Example with [labstack/echo](https://github.com/labstack/echo):
 
 ```go
 e := echo.New()
-mon := asynqmon.New(asynqmon.Options{
+mon := asynqdash.New(asynqdash.Options{
 	RootPath:     "/monitoring/tasks",
 	RedisConnOpt: asynq.RedisClientOpt{Addr: ":6379"},
 })
@@ -226,4 +231,4 @@ Useful commands: `npm run typecheck`, `npm run format`, `make test`.
 
 ## License
 
-Copyright (c) 2019-present [Ken Hibino](https://github.com/hibiken) and [Contributors](https://github.com/hibiken/asynqmon/graphs/contributors). `Asynqmon` is free and open-source software licensed under the [MIT License](LICENSE). Official logo was created by [Vic Shóstak](https://github.com/koddr) and distributed under [Creative Commons](https://creativecommons.org/publicdomain/zero/1.0/) license (CC0 1.0 Universal).
+Asynqdash is free and open-source software licensed under the [MIT License](LICENSE). It is based on [asynqmon](https://github.com/hibiken/asynqmon), copyright (c) 2019-present [Ken Hibino](https://github.com/hibiken) and [contributors](https://github.com/hibiken/asynqmon/graphs/contributors). The Asynqdash wordmark uses [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans) (SIL Open Font License 1.1). "Asynq" refers to the [Asynq](https://github.com/hibiken/asynq) project, which this console works with.

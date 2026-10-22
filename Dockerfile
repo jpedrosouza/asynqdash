@@ -39,7 +39,7 @@ COPY --from=frontend ["/static/build", "ui/build"]
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 
 # Run go build (with ldflags to reduce binary size).
-RUN go build -ldflags="-s -w" -o asynqmon ./cmd/asynqmon
+RUN go build -ldflags="-s -w" -o asynqdash ./cmd/asynqdash
 
 #
 # Third stage:
@@ -49,7 +49,7 @@ RUN go build -ldflags="-s -w" -o asynqmon ./cmd/asynqmon
 FROM scratch
 
 # Copy binary from /build to the root folder of the scratch container.
-COPY --from=backend ["/build/asynqmon", "/"]
+COPY --from=backend ["/build/asynqdash", "/"]
 
 # Command to run when starting the container.
-ENTRYPOINT ["/asynqmon"]
+ENTRYPOINT ["/asynqdash"]

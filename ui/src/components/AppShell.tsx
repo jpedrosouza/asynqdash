@@ -82,9 +82,9 @@ function AppSidebar() {
         <AppLink
           href={paths.home}
           className="flex h-8 items-center gap-2 px-1 text-kumo-default"
-          aria-label="Asynqmon home"
+          aria-label="Asynqdash home"
         >
-          {collapsed ? <LogoMark className="size-7" /> : <Logo className="h-6 w-auto" />}
+          {collapsed ? <LogoMark className="size-7" /> : <Logo className="h-7 w-auto" />}
         </AppLink>
       </Sidebar.Header>
       <Sidebar.Content>

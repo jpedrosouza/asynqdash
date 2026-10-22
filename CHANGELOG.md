@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-22
+
+### Changed
+
+- Renamed the project to **Asynqdash**: module `github.com/jpedrosouza/asynqdash`, package `asynqdash`
+  (`asynqdash.New`, `asynqdash.Options`), binary `asynqdash` and Docker image `ghcr.io/jpedrosouza/asynqdash`.
+  The options, flags and HTTP API are unchanged.
+- (ui): New logo, favicons and app icons. Saved preferences carry over from the previous name.
+- (ci): Release binaries for linux/arm64 and darwin/arm64.
+
 ## [0.8.0] - 2026-10-22
 
 This release starts the independently maintained fork (`github.com/jpedrosouza/asynqmon`).

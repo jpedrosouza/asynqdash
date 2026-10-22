@@ -1,4 +1,4 @@
-package asynqmon
+package asynqdash
 
 import (
 	"compress/gzip"
@@ -11,7 +11,7 @@ import (
 )
 
 func newTestAssetsHandler(rootPath string) *uiAssetsHandler {
-	bigJS := strings.Repeat("console.log('asynqmon');\n", 200)
+	bigJS := strings.Repeat("console.log('asynqdash');\n", 200)
 	return &uiAssetsHandler{
 		rootPath: rootPath,
 		contents: fstest.MapFS{

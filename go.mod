@@ -1,4 +1,4 @@
-module github.com/jpedrosouza/asynqmon
+module github.com/jpedrosouza/asynqdash
 
 go 1.16
 
