@@ -1,0 +1,37 @@
+<!--
+  This file is used as a template by Go's html/template package, with the
+  custom action delimiters defined in static.go.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Asynq monitoring web console" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/[[.RootPath]]/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/[[.RootPath]]/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/[[.RootPath]]/apple-touch-icon.png" />
+    <link rel="manifest" href="/[[.RootPath]]/manifest.json" />
+    <script>
+      window.FLAG_ROOT_PATH = "/[[.RootPath]]";
+      window.FLAG_PROMETHEUS_SERVER_ADDRESS = "/[[.PrometheusAddr]]";
+      window.FLAG_READ_ONLY = "/[[.ReadOnly]]";
+      // Apply the saved theme before the first paint to avoid a flash.
+      (function () {
+        try {
+          var s = JSON.parse(localStorage.getItem("asynqmon:settings") || "{}");
+          var t = s.theme || "system";
+          var dark = t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.setAttribute("data-mode", dark ? "dark" : "light");
+        } catch (e) {}
+      })();
+    </script>
+    <title>Asynqmon</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

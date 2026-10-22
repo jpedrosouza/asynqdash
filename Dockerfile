@@ -1,53 +1,48 @@
 #
-# First stage: 
-# Building a frontend.
+# First stage:
+# Building the frontend.
 #
 
-FROM alpine:3.17 AS frontend
+FROM node:22-alpine AS frontend
 
-# Move to a working directory (/static).
 WORKDIR /static
 
-# https://stackoverflow.com/questions/69692842/error-message-error0308010cdigital-envelope-routinesunsupported
-ENV NODE_OPTIONS=--openssl-legacy-provider
-# Install npm (with latest nodejs) and yarn (globally, in silent mode).
-RUN apk add --update nodejs npm && \
-    npm i -g -s --unsafe-perm yarn
+# Install dependencies first to take advantage of the layer cache.
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci
 
-# Copy only ./ui folder to the working directory.
+# Copy the rest of the ./ui folder and build the static assets into /static/build.
 COPY ui .
-
-# Run yarn scripts (install & build).
-RUN yarn install && yarn build
+RUN npm run build
 
 #
-# Second stage: 
-# Building a backend.
+# Second stage:
+# Building the backend.
 #
 
-FROM golang:1.18-alpine AS backend
+FROM golang:1.23-alpine AS backend
 
-# Move to a working directory (/build).
 WORKDIR /build
 
 # Copy and download dependencies.
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy a source code to the container.
+# Copy the source code to the container.
 COPY . .
 
-# Copy frontend static files from /static to the root folder of the backend container.
+# Replace the committed UI build with the one built in the first stage.
+RUN rm -rf ui/build
 COPY --from=frontend ["/static/build", "ui/build"]
 
-# Set necessary environmet variables needed for the image and build the server.
+# Set necessary environment variables needed for the image and build the server.
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 
 # Run go build (with ldflags to reduce binary size).
 RUN go build -ldflags="-s -w" -o asynqmon ./cmd/asynqmon
 
 #
-# Third stage: 
+# Third stage:
 # Creating and running a new scratch container with the backend binary.
 #
 

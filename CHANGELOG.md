@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This release starts the independently maintained fork (`github.com/jpedrosouza/asynqmon`).
+
+### Changed
+
+- (pkg): Module path is now `github.com/jpedrosouza/asynqmon`. The Go API and command-line flags are unchanged.
+- (ui): Rebuilt the web UI with React 19, Vite, Kumo components and TanStack Query, replacing Material UI v4,
+  Create React App and Redux.
+- (ui): Full-width responsive layout, collapsible sidebar with queue list, command palette (Ctrl/⌘ + K),
+  live indicator with pause/resume, task quick view, bulk actions, URL-synced tabs and pagination.
+- (ui): Destructive and bulk actions ask for confirmation; deleting every task of a state requires typing the queue name.
+- (ui): Every action reports success or failure with a notification.
+- (ui): Settings for theme (system/light/dark), time zone (local/UTC), refresh interval and page size.
+- (pkg): Static assets are served with correct MIME types, gzip compression and cache headers.
+- (cmd): Docker image builds with Node 22 and Go 1.23, and is published to GitHub Container Registry.
+
+### Added
+
+- (pkg): `GET /api/health` endpoint for liveness/readiness probes.
+- (pkg): `GET /api/queues/{qname}/task_types` endpoint with a breakdown of tasks by type and state.
+- (pkg): `POST /api/scheduler_entries/{entry_id}:run` endpoint to enqueue a periodic task immediately.
+
+### Fixed
+
+- (pkg): Embedded UI assets could not be served on Windows.
+- (pkg): Payloads containing line breaks or tabs were shown as "non-printable bytes"; empty payloads are shown as empty.
+- (ui): Double scrollbars and fixed 1280px content width.
+- (ui): Deleting the tasks of the last page left an empty page without pagination.
+- (ui): Selections could include tasks that were no longer listed after a refresh.
+- (ui): Queue actions were only reachable by hovering with a mouse.
+- (ui): Error rate sorting was broken for queues without processed tasks.
+- (ui): Chart tooltips ignored dark mode.
+- (cmd): Test expectation for redis-sentinel URLs.
+
 ## [0.7.0] - 2022-04-11
 
 Version 0.7 added support for [Task Aggregation](https://github.com/hibiken/asynq/wiki/Task-aggregation) feature

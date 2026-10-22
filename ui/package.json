@@ -1,63 +1,38 @@
 {
-  "name": "ui",
-  "version": "0.1.0",
+  "name": "asynqmon-ui",
+  "version": "1.0.0",
   "private": true,
-  "dependencies": {
-    "@material-ui/core": "4.12.3",
-    "@material-ui/icons": "4.11.2",
-    "@material-ui/lab": "4.0.0-alpha.58",
-    "@reduxjs/toolkit": "1.6.2",
-    "@testing-library/jest-dom": "^5.12.0",
-    "@testing-library/react": "^12.1.2",
-    "@testing-library/user-event": "^13.1.9",
-    "@types/jest": "^27.0.2",
-    "@types/lodash.uniqby": "4.7.6",
-    "@types/node": "^16.3.1",
-    "@types/react": "^17.0.29",
-    "@types/react-dom": "^17.0.9",
-    "@types/react-redux": "7.1.19",
-    "@types/react-router-dom": "5.3.1",
-    "@types/react-syntax-highlighter": "13.5.2",
-    "@types/recharts": "1.8.20",
-    "axios": "0.21.2",
-    "clsx": "1.1.1",
-    "dayjs": "1.10.7",
-    "lodash.uniqby": "4.7.0",
-    "query-string": "7.0.1",
-    "react": "^16.13.1",
-    "react-dom": "^16.13.1",
-    "react-redux": "7.2.4",
-    "react-router-dom": "5.3.0",
-    "react-scripts": "5.0.1",
-    "react-syntax-highlighter": "15.4.3",
-    "react-window": "1.8.6",
-    "recharts": "2.1.4",
-    "typescript": "~4.2.4"
-  },
+  "type": "module",
   "scripts": {
-    "start": "export PUBLIC_URL=http://localhost:3000/ && react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write src vite.config.ts index.html",
+    "format:check": "prettier --check src vite.config.ts index.html"
   },
-  "eslintConfig": {
-    "extends": "react-app"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+  "dependencies": {
+    "@cloudflare/kumo": "^2.15.0",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tanstack/react-query": "^5.104.5",
+    "cronstrue": "^3.38.0",
+    "echarts": "^6.1.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router": "^7.18.4",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/react-window": "1.8.5",
-    "redux-devtools": "3.7.0"
-  },
-  "homepage": "/[[.RootPath]]"
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "prettier": "^3.9.10",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
 }
