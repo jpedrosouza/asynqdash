@@ -14,6 +14,8 @@ import type {
   TaskInfo,
   TaskState,
   TaskTypesResponse,
+  ThroughputResolution,
+  ThroughputResponse,
 } from "./types";
 
 const BASE_URL = `${ROOT_PATH}/api`;
@@ -58,6 +60,9 @@ function pageQuery(p?: PageOptions): string {
   return p ? `?page=${p.page}&size=${p.size}` : "";
 }
 
+/** Order of task lists: newest first ("desc") or oldest first ("asc"). */
+export type ListOrder = "desc" | "asc";
+
 /* ------------------------------- Queues -------------------------------- */
 
 export const listQueues = () => request<{ queues: Queue[] }>("GET", "/queues").then((r) => r.queues);
@@ -83,8 +88,8 @@ function tasksPath(qname: string, state: TaskState, group?: string): string {
   return `/queues/${q(qname)}/${state}_tasks`;
 }
 
-export const listTasks = (qname: string, state: TaskState, page: PageOptions, group?: string) =>
-  request<ListTasksResponse>("GET", tasksPath(qname, state, group) + pageQuery(page));
+export const listTasks = (qname: string, state: TaskState, page: PageOptions, order: ListOrder, group?: string) =>
+  request<ListTasksResponse>("GET", `${tasksPath(qname, state, group)}${pageQuery(page)}&order=${order}`);
 
 export const getTask = (qname: string, taskId: string) =>
   request<TaskInfo>("GET", `/queues/${q(qname)}/tasks/${q(taskId)}`);
@@ -150,6 +155,20 @@ export const runSchedulerEntry = (entryId: string) =>
 /* ------------------------------ Redis/metrics -------------------------- */
 
 export const getRedisInfo = () => request<RedisInfoResponse>("GET", "/redis_info");
+
+/**
+ * Tasks enqueued, processed and failed per minute or per hour, as recorded by the throughput
+ * collector. Queues default to every queue.
+ */
+export function getThroughput(
+  resolution: ThroughputResolution,
+  durationSeconds: number,
+  queues: string[] = [],
+): Promise<ThroughputResponse> {
+  const params = new URLSearchParams({ resolution, duration: String(durationSeconds) });
+  for (const name of queues) params.append("queue", name);
+  return request("GET", `/throughput?${params.toString()}`);
+}
 
 export function getMetrics(endTime: number, duration: number, queues: string[]): Promise<MetricsResponse> {
   const params = new URLSearchParams({ endtime: String(endTime), duration: String(duration) });

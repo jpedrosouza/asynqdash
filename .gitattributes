@@ -7,6 +7,7 @@ ui/*.ts text eol=lf
 ui/public/*.md text eol=lf
 ui/public/*.json text eol=lf
 ui/public/*.txt text eol=lf
+ui/public/*.svg text eol=lf
 
 # Generated assets are committed as produced by the build.
 ui/build/** -text

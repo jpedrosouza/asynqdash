@@ -42,6 +42,27 @@ type Options struct {
 
 	// Set ReadOnly to true to restrict user to view-only mode.
 	ReadOnly bool
+
+	// MaxPayloadLength is the maximum number of characters of a payload shown in task lists.
+	// Longer payloads are truncated. Task details always show the full payload.
+	//
+	// This field is optional. Zero means no limit.
+	MaxPayloadLength int
+
+	// MaxResultLength is the maximum number of characters of a result shown in task lists.
+	// Longer results are truncated. Task details always show the full result.
+	//
+	// This field is optional. Zero means no limit.
+	MaxResultLength int
+
+	// By default, asynqdash samples the queues every 10 seconds and records how many tasks are
+	// enqueued, processed and failed per minute and per hour, in keys prefixed with "asynqdash:"
+	// in the same redis. This is shown as the throughput of each queue in the web UI.
+	// Minute buckets are kept for 3 hours and hour buckets for 91 days.
+	//
+	// Set DisableThroughputCollector to true to stop recording. Data recorded by other
+	// asynqdash instances connected to the same redis is still shown.
+	DisableThroughputCollector bool
 }
 
 // HTTPHandler is a http.Handler for asynqdash application.
@@ -62,7 +83,7 @@ func New(opts Options) *HTTPHandler {
 	}
 	rc, ok := opts.RedisConnOpt.MakeRedisClient().(redis.UniversalClient)
 	if !ok {
-		panic(fmt.Sprintf("asnyqmon.New: unsupported RedisConnOpt type %T", opts.RedisConnOpt))
+		panic(fmt.Sprintf("asynqdash.New: unsupported RedisConnOpt type %T", opts.RedisConnOpt))
 	}
 	i := asynq.NewInspector(opts.RedisConnOpt)
 	c := asynq.NewClient(opts.RedisConnOpt)
@@ -74,9 +95,17 @@ func New(opts Options) *HTTPHandler {
 	// Remove tailing slash from RootPath.
 	opts.RootPath = strings.TrimSuffix(opts.RootPath, "/")
 
+	closers := []func() error{rc.Close, i.Close, c.Close}
+	if !opts.DisableThroughputCollector {
+		collector := newThroughputCollector(rc, i)
+		collector.start()
+		// Stop the collector before closing the connections it uses.
+		closers = append([]func() error{collector.stop}, closers...)
+	}
+
 	return &HTTPHandler{
 		router:   muxRouter(opts, rc, i, c),
-		closers:  []func() error{rc.Close, i.Close, c.Close},
+		closers:  closers,
 		rootPath: opts.RootPath,
 	}
 }
@@ -113,6 +142,10 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 		resultFmt = opts.ResultFormatter
 	}
 
+	// Lists show a preview of payloads and results; task details show them in full.
+	listPayloadFmt := truncatingPayloadFormatter(payloadFmt, opts.MaxPayloadLength)
+	listResultFmt := truncatingResultFormatter(resultFmt, opts.MaxResultLength)
+
 	api := router.PathPrefix("/api").Subrouter()
 
 	// Health check endpoint.
@@ -132,12 +165,12 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 	api.HandleFunc("/queues/{qname}/task_types", newListTaskTypesHandlerFunc(inspector)).Methods("GET")
 
 	// Task endpoints.
-	api.HandleFunc("/queues/{qname}/active_tasks", newListActiveTasksHandlerFunc(inspector, payloadFmt)).Methods("GET")
+	api.HandleFunc("/queues/{qname}/active_tasks", newListActiveTasksHandlerFunc(inspector, listPayloadFmt)).Methods("GET")
 	api.HandleFunc("/queues/{qname}/active_tasks/{task_id}:cancel", newCancelActiveTaskHandlerFunc(inspector)).Methods("POST")
 	api.HandleFunc("/queues/{qname}/active_tasks:cancel_all", newCancelAllActiveTasksHandlerFunc(inspector)).Methods("POST")
 	api.HandleFunc("/queues/{qname}/active_tasks:batch_cancel", newBatchCancelActiveTasksHandlerFunc(inspector)).Methods("POST")
 
-	api.HandleFunc("/queues/{qname}/pending_tasks", newListPendingTasksHandlerFunc(inspector, payloadFmt)).Methods("GET")
+	api.HandleFunc("/queues/{qname}/pending_tasks", newListPendingTasksHandlerFunc(inspector, listPayloadFmt)).Methods("GET")
 	api.HandleFunc("/queues/{qname}/pending_tasks/{task_id}", newDeleteTaskHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/pending_tasks:delete_all", newDeleteAllPendingTasksHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/pending_tasks:batch_delete", newBatchDeleteTasksHandlerFunc(inspector)).Methods("POST")
@@ -145,7 +178,7 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 	api.HandleFunc("/queues/{qname}/pending_tasks:archive_all", newArchiveAllPendingTasksHandlerFunc(inspector)).Methods("POST")
 	api.HandleFunc("/queues/{qname}/pending_tasks:batch_archive", newBatchArchiveTasksHandlerFunc(inspector)).Methods("POST")
 
-	api.HandleFunc("/queues/{qname}/scheduled_tasks", newListScheduledTasksHandlerFunc(inspector, payloadFmt)).Methods("GET")
+	api.HandleFunc("/queues/{qname}/scheduled_tasks", newListScheduledTasksHandlerFunc(inspector, listPayloadFmt)).Methods("GET")
 	api.HandleFunc("/queues/{qname}/scheduled_tasks/{task_id}", newDeleteTaskHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/scheduled_tasks:delete_all", newDeleteAllScheduledTasksHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/scheduled_tasks:batch_delete", newBatchDeleteTasksHandlerFunc(inspector)).Methods("POST")
@@ -156,7 +189,7 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 	api.HandleFunc("/queues/{qname}/scheduled_tasks:archive_all", newArchiveAllScheduledTasksHandlerFunc(inspector)).Methods("POST")
 	api.HandleFunc("/queues/{qname}/scheduled_tasks:batch_archive", newBatchArchiveTasksHandlerFunc(inspector)).Methods("POST")
 
-	api.HandleFunc("/queues/{qname}/retry_tasks", newListRetryTasksHandlerFunc(inspector, payloadFmt)).Methods("GET")
+	api.HandleFunc("/queues/{qname}/retry_tasks", newListRetryTasksHandlerFunc(inspector, listPayloadFmt)).Methods("GET")
 	api.HandleFunc("/queues/{qname}/retry_tasks/{task_id}", newDeleteTaskHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/retry_tasks:delete_all", newDeleteAllRetryTasksHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/retry_tasks:batch_delete", newBatchDeleteTasksHandlerFunc(inspector)).Methods("POST")
@@ -167,7 +200,7 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 	api.HandleFunc("/queues/{qname}/retry_tasks:archive_all", newArchiveAllRetryTasksHandlerFunc(inspector)).Methods("POST")
 	api.HandleFunc("/queues/{qname}/retry_tasks:batch_archive", newBatchArchiveTasksHandlerFunc(inspector)).Methods("POST")
 
-	api.HandleFunc("/queues/{qname}/archived_tasks", newListArchivedTasksHandlerFunc(inspector, payloadFmt)).Methods("GET")
+	api.HandleFunc("/queues/{qname}/archived_tasks", newListArchivedTasksHandlerFunc(inspector, listPayloadFmt)).Methods("GET")
 	api.HandleFunc("/queues/{qname}/archived_tasks/{task_id}", newDeleteTaskHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/archived_tasks:delete_all", newDeleteAllArchivedTasksHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/archived_tasks:batch_delete", newBatchDeleteTasksHandlerFunc(inspector)).Methods("POST")
@@ -175,12 +208,12 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 	api.HandleFunc("/queues/{qname}/archived_tasks:run_all", newRunAllArchivedTasksHandlerFunc(inspector)).Methods("POST")
 	api.HandleFunc("/queues/{qname}/archived_tasks:batch_run", newBatchRunTasksHandlerFunc(inspector)).Methods("POST")
 
-	api.HandleFunc("/queues/{qname}/completed_tasks", newListCompletedTasksHandlerFunc(inspector, payloadFmt, resultFmt)).Methods("GET")
+	api.HandleFunc("/queues/{qname}/completed_tasks", newListCompletedTasksHandlerFunc(inspector, listPayloadFmt, listResultFmt)).Methods("GET")
 	api.HandleFunc("/queues/{qname}/completed_tasks/{task_id}", newDeleteTaskHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/completed_tasks:delete_all", newDeleteAllCompletedTasksHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/completed_tasks:batch_delete", newBatchDeleteTasksHandlerFunc(inspector)).Methods("POST")
 
-	api.HandleFunc("/queues/{qname}/groups/{gname}/aggregating_tasks", newListAggregatingTasksHandlerFunc(inspector, payloadFmt)).Methods("GET")
+	api.HandleFunc("/queues/{qname}/groups/{gname}/aggregating_tasks", newListAggregatingTasksHandlerFunc(inspector, listPayloadFmt)).Methods("GET")
 	api.HandleFunc("/queues/{qname}/groups/{gname}/aggregating_tasks/{task_id}", newDeleteTaskHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/groups/{gname}/aggregating_tasks:delete_all", newDeleteAllAggregatingTasksHandlerFunc(inspector)).Methods("DELETE")
 	api.HandleFunc("/queues/{qname}/groups/{gname}/aggregating_tasks:batch_delete", newBatchDeleteTasksHandlerFunc(inspector)).Methods("POST")
@@ -197,10 +230,10 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 	api.HandleFunc("/queues/{qname}/groups", newListGroupsHandlerFunc(inspector)).Methods("GET")
 
 	// Servers endpoints.
-	api.HandleFunc("/servers", newListServersHandlerFunc(inspector, payloadFmt)).Methods("GET")
+	api.HandleFunc("/servers", newListServersHandlerFunc(inspector, listPayloadFmt)).Methods("GET")
 
 	// Scheduler Entry endpoints.
-	api.HandleFunc("/scheduler_entries", newListSchedulerEntriesHandlerFunc(inspector, payloadFmt)).Methods("GET")
+	api.HandleFunc("/scheduler_entries", newListSchedulerEntriesHandlerFunc(inspector, listPayloadFmt)).Methods("GET")
 	api.HandleFunc("/scheduler_entries/{entry_id}/enqueue_events", newListSchedulerEnqueueEventsHandlerFunc(inspector)).Methods("GET")
 	api.HandleFunc("/scheduler_entries/{entry_id}:run", newRunSchedulerEntryHandlerFunc(inspector, client)).Methods("POST")
 
@@ -211,6 +244,9 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 	case *redis.Client:
 		api.HandleFunc("/redis_info", newRedisInfoHandlerFunc(c)).Methods("GET")
 	}
+
+	// Throughput recorded by the collector.
+	api.HandleFunc("/throughput", newGetThroughputHandlerFunc(rc, inspector, !opts.DisableThroughputCollector)).Methods("GET")
 
 	// Time series metrics endpoints.
 	api.HandleFunc("/metrics", newGetMetricsHandlerFunc(http.DefaultClient, opts.PrometheusAddress)).Methods("GET")

@@ -14,7 +14,8 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { READ_ONLY } from "../lib/flags";
-import { useQueueActions, useQueues, useQueueStats } from "../lib/queries";
+import { useProcessedToday, useQueueActions, useQueues, useQueueStats, useThroughput } from "../lib/queries";
+import { dailyProcessed, isUtcDays, sumQueues, type QueueToday } from "../lib/throughput";
 import { useSettings, type DailyStatsRange } from "../lib/settings";
 import { formatBytes, formatCompact, formatNumber, formatPercent, ratio } from "../lib/format";
 import { queuePath } from "../lib/paths";
@@ -91,10 +92,18 @@ function SortHead({
   );
 }
 
-function SummaryStats({ queues }: { queues: Queue[] }) {
+interface Today {
+  queues: QueueToday[];
+  source: "collector" | "utc";
+}
+
+function SummaryStats({ queues, today }: { queues: Queue[]; today: Today }) {
+  const { settings } = useSettings();
   const sum = (f: (q: Queue) => number) => queues.reduce((acc, q) => acc + f(q), 0);
-  const processed = sum((q) => q.processed);
-  const failed = sum((q) => q.failed);
+  const processed = today.queues.reduce((acc, q) => acc + q.processed, 0);
+  const failed = today.queues.reduce((acc, q) => acc + q.failed, 0);
+  // asynq counts "today" in UTC; say so when the selected time zone has another day.
+  const utcNote = today.source === "utc" && !isUtcDays(settings.timeZone) ? " · UTC day" : "";
   const errorRate = ratio(failed, processed);
   const paused = queues.filter((q) => q.paused).length;
   return (
@@ -125,7 +134,7 @@ function SummaryStats({ queues }: { queues: Queue[] }) {
       <Stat
         label="Processed today"
         value={<LiveNumber value={processed} format={formatCompact} />}
-        hint={`${formatCompact(failed)} failed`}
+        hint={`${formatCompact(failed)} failed${utcNote}`}
       />
       <Stat
         label="Error rate today"
@@ -138,16 +147,32 @@ function SummaryStats({ queues }: { queues: Queue[] }) {
 
 const RANGE_DAYS: Record<Exclude<DailyStatsRange, "today">, number> = { "7d": 7, "30d": 30, "90d": 90 };
 
-function ProcessedCard({ queues }: { queues: Queue[] }) {
+function ProcessedCard({ today }: { today: Today }) {
   const { settings, update } = useSettings();
+  const tz = settings.timeZone;
   const range = settings.dailyStatsRange;
+  const days = range === "today" ? 0 : RANGE_DAYS[range];
   const stats = useQueueStats();
+  // Local days are rebuilt from the hourly throughput recorded by asynqdash.
+  const local = !isUtcDays(tz);
+  const hourly = useThroughput("hour", days * 86_400, [], local && days > 0);
+  const waitingForHourly = local && days > 0 && hourly.isLoading;
+  const daily = useMemo(
+    () =>
+      stats.data && days > 0
+        ? dailyProcessed(stats.data, local && hourly.data ? sumQueues(hourly.data) : undefined, days, tz)
+        : null,
+    [stats.data, hourly.data, local, days, tz],
+  );
+  const info = local
+    ? "Succeeded and failed tasks per day, in your time zone. asynq records days in UTC: days before Asynqdash recorded throughput are shown as UTC days."
+    : "Succeeded and failed tasks per day (UTC), as recorded by asynq.";
   return (
     <Card
       title={
         <span className="flex items-center gap-1.5">
           Tasks processed
-          <Tooltip content="Succeeded and failed tasks per day. Days are in UTC, as recorded by asynq.">
+          <Tooltip content={info}>
             <InfoIcon className="text-kumo-subtle" />
           </Tooltip>
         </span>
@@ -167,13 +192,13 @@ function ProcessedCard({ queues }: { queues: Queue[] }) {
       }
     >
       {range === "today" ? (
-        <ProcessedTodayChart queues={queues} />
+        <ProcessedTodayChart queues={today.queues} />
       ) : stats.error ? (
         <ErrorState title="Could not load history" error={stats.error} onRetry={() => stats.refetch()} />
-      ) : !stats.data ? (
+      ) : !daily || waitingForHourly ? (
         <LoadingState className="h-[280px]" />
       ) : (
-        <DailyStatsChart stats={stats.data} days={RANGE_DAYS[range]} />
+        <DailyStatsChart daily={daily} />
       )}
     </Card>
   );
@@ -365,8 +390,11 @@ function QueuesTable({ queues }: { queues: Queue[] }) {
   );
 }
 
+const NO_QUEUES: Queue[] = [];
+
 export function DashboardPage() {
   const { data: queues, error, isLoading, refetch } = useQueues();
+  const today = useProcessedToday(queues ?? NO_QUEUES);
 
   return (
     <Page>
@@ -384,7 +412,7 @@ export function DashboardPage() {
         />
       ) : (
         <>
-          <SummaryStats queues={queues} />
+          <SummaryStats queues={queues} today={today} />
           <div className="grid gap-4 xl:grid-cols-2">
             <Card
               title={
@@ -398,7 +426,7 @@ export function DashboardPage() {
             >
               <QueueSizeChart queues={queues} />
             </Card>
-            <ProcessedCard queues={queues} />
+            <ProcessedCard today={today} />
           </div>
           <QueuesTable queues={queues} />
         </>

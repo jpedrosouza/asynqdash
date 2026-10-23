@@ -3,6 +3,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 export type ThemePreference = "system" | "light" | "dark";
 export type TimeZonePreference = "local" | "utc";
 export type DailyStatsRange = "today" | "7d" | "30d" | "90d";
+/** Order of task lists: newest first ("desc") or oldest first ("asc"). */
+export type TaskOrder = "desc" | "asc";
+export type ThroughputRange = "1h" | "1d" | "7d" | "30d";
 
 export interface Settings {
   theme: ThemePreference;
@@ -15,6 +18,8 @@ export interface Settings {
   pageSize: number;
   sidebarOpen: boolean;
   dailyStatsRange: DailyStatsRange;
+  taskOrder: TaskOrder;
+  throughputRange: ThroughputRange;
 }
 
 const STORAGE_KEY = "asynqdash:settings";
@@ -29,6 +34,8 @@ export const DEFAULT_SETTINGS: Settings = {
   pageSize: 20,
   sidebarOpen: true,
   dailyStatsRange: "7d",
+  taskOrder: "desc",
+  throughputRange: "1h",
 };
 
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];

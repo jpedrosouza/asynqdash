@@ -7,6 +7,7 @@ const charts = () => import("./charts");
 const QueueSizeChartImpl = lazy(() => charts().then((m) => ({ default: m.QueueSizeChart })));
 const ProcessedTodayChartImpl = lazy(() => charts().then((m) => ({ default: m.ProcessedTodayChart })));
 const DailyStatsChartImpl = lazy(() => charts().then((m) => ({ default: m.DailyStatsChart })));
+const ThroughputChartImpl = lazy(() => charts().then((m) => ({ default: m.ThroughputChart })));
 
 function ChartFallback({ height = 280 }: { height?: number }) {
   return <div className="skeleton w-full rounded-lg" style={{ height }} aria-hidden="true" />;
@@ -32,6 +33,14 @@ export function DailyStatsChart(props: ComponentProps<typeof DailyStatsChartImpl
   return (
     <Suspense fallback={<ChartFallback height={props.height} />}>
       <DailyStatsChartImpl {...props} />
+    </Suspense>
+  );
+}
+
+export function ThroughputChart(props: ComponentProps<typeof ThroughputChartImpl>) {
+  return (
+    <Suspense fallback={<ChartFallback height={props.height ?? 240} />}>
+      <ThroughputChartImpl {...props} />
     </Suspense>
   );
 }

@@ -22,13 +22,13 @@ func newListQueuesHandlerFunc(inspector *asynq.Inspector) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		snapshots := make([]*queueStateSnapshot, len(qnames))
-		for i, qname := range qnames {
-			qinfo, err := inspector.GetQueueInfo(qname)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+		infos, err := getQueueInfos(inspector, qnames)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		snapshots := make([]*queueStateSnapshot, len(infos))
+		for i, qinfo := range infos {
 			snapshots[i] = toQueueStateSnapshot(qinfo)
 		}
 		payload := map[string]interface{}{"queues": snapshots}

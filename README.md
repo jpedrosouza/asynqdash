@@ -35,7 +35,10 @@ Asynqdash is both a library that you can mount in your Go web application, and a
 - Task page with error banner, retry meter, timeline and full payload/result viewer (copy, download, line wrap).
 - Servers page with worker utilization, schedulers page with human-readable cron specs, enqueue history and "Run now",
   Redis page with key metrics and a searchable INFO view.
-- Light/dark/system theme, local or UTC time zone, configurable refresh interval and page size.
+- Throughput of each queue: tasks enqueued, succeeded and failed per minute (last 60 minutes), per hour (24 hours)
+  or per day (7 and 30 days), recorded by Asynqdash itself (see [Throughput](#throughput)).
+- Task lists show the newest tasks first, with a switch to show the oldest first.
+- Light/dark/system theme, local or UTC time zone (also for charts and "today"), configurable refresh interval and page size.
 - Read-only mode hides every action.
 
 **Server-side improvements:**
@@ -43,8 +46,18 @@ Asynqdash is both a library that you can mount in your Go web application, and a
 - Static assets are served with correct MIME types, gzip compression and long-term caching for fingerprinted files.
 - The embedded UI works on Windows (paths in `embed.FS` are always forward slashes).
 - Payloads with line breaks or tabs are displayed instead of being reported as "non-printable bytes".
-- New endpoints: `GET /api/health`, `GET /api/queues/{qname}/task_types` and `POST /api/scheduler_entries/{entry_id}:run`
-  (see [API additions](#api-additions)).
+- Task details show the full payload and result; `--max-payload-length` and `--max-result-length` only shorten lists.
+- The queue list loads queues concurrently, which keeps it fast with many queues.
+- New endpoints: `GET /api/health`, `GET /api/throughput`, `GET /api/queues/{qname}/task_types` and
+  `POST /api/scheduler_entries/{entry_id}:run`, and an `order` parameter for task lists (see [API additions](#api-additions)).
+
+**Command-line improvements:**
+
+- `--root-path` to serve the UI under a sub-path, e.g. behind a reverse proxy.
+- Optional HTTP basic authentication (`--basic-auth-username`, `--basic-auth-password`).
+- Redis ACL users (`--redis-username`), TLS with a custom CA and client certificates (`--redis-ca-cert`,
+  `--redis-client-cert`, `--redis-client-key`), and a separate password for the master behind redis-sentinel.
+- Multi-architecture Docker image (linux/amd64 and linux/arm64).
 
 ## Install the binary
 
@@ -85,19 +98,29 @@ Run `./asynqdash --help` to see every flag.
 
 _Note_: Use `--redis-url` to specify address, db number, and password with one flag value; alternatively, use `--redis-addr`, `--redis-db`, and `--redis-password` to specify each value.
 
-| Flag                              | Env                       | Description                                                                                                                  | Default          |
-| --------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `--port`(int)                     | `PORT`                    | port number to use for web ui server                                                                                         | 8080             |
-| `--redis-url`(string)             | `REDIS_URL`               | URL to redis or sentinel server. See [godoc](https://pkg.go.dev/github.com/hibiken/asynq#ParseRedisURI) for supported format | ""               |
-| `--redis-addr`(string)            | `REDIS_ADDR`              | address of redis server to connect to                                                                                        | "127.0.0.1:6379" |
-| `--redis-db`(int)                 | `REDIS_DB`                | redis database number                                                                                                        | 0                |
-| `--redis-password`(string)        | `REDIS_PASSWORD`          | password to use when connecting to redis server                                                                              | ""               |
-| `--redis-cluster-nodes`(string)   | `REDIS_CLUSTER_NODES`     | comma separated list of host:port addresses of cluster nodes                                                                 | ""               |
-| `--redis-tls`(string)             | `REDIS_TLS`               | server name for TLS validation used when connecting to redis server                                                          | ""               |
-| `--redis-insecure-tls`(bool)      | `REDIS_INSECURE_TLS`      | disable TLS certificate host checks                                                                                          | false            |
-| `--enable-metrics-exporter`(bool) | `ENABLE_METRICS_EXPORTER` | enable prometheus metrics exporter to expose queue metrics                                                                   | false            |
-| `--prometheus-addr`(string)       | `PROMETHEUS_ADDR`         | address of prometheus server to query time series                                                                            | ""               |
-| `--read-only`(bool)               | `READ_ONLY`               | use web UI in read-only mode                                                                                                 | false            |
+| Flag                                   | Env                            | Description                                                                                                                  | Default          |
+| -------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `--port`(int)                          | `PORT`                         | port number to use for web ui server                                                                                         | 8080             |
+| `--root-path`(string)                  | `ROOT_PATH`                    | URL path under which the web UI and the API are served, e.g. `/asynqdash` behind a reverse proxy                             | "/"              |
+| `--basic-auth-username`(string)        | `BASIC_AUTH_USERNAME`          | username for HTTP basic authentication; requires `--basic-auth-password`                                                     | ""               |
+| `--basic-auth-password`(string)        | `BASIC_AUTH_PASSWORD`          | password for HTTP basic authentication; requires `--basic-auth-username`                                                     | ""               |
+| `--redis-url`(string)                  | `REDIS_URL`                    | URL to redis or sentinel server. See [godoc](https://pkg.go.dev/github.com/hibiken/asynq#ParseRedisURI) for supported format | ""               |
+| `--redis-addr`(string)                 | `REDIS_ADDR`                   | address of redis server to connect to                                                                                        | "127.0.0.1:6379" |
+| `--redis-db`(int)                      | `REDIS_DB`                     | redis database number                                                                                                        | 0                |
+| `--redis-username`(string)             | `REDIS_USERNAME`               | username to use when connecting to redis server (Redis ACL)                                                                  | ""               |
+| `--redis-password`(string)             | `REDIS_PASSWORD`               | password to use when connecting to redis server; with a redis-sentinel URL, the password of the master                       | ""               |
+| `--redis-cluster-nodes`(string)        | `REDIS_CLUSTER_NODES`          | comma separated list of host:port addresses of cluster nodes                                                                 | ""               |
+| `--redis-tls`(string)                  | `REDIS_TLS`                    | server name for TLS validation used when connecting to redis server                                                          | ""               |
+| `--redis-insecure-tls`(bool)           | `REDIS_INSECURE_TLS`           | disable TLS certificate host checks                                                                                          | false            |
+| `--redis-ca-cert`(string)              | `REDIS_CA_CERT`                | path to a PEM file with the CA certificates used to verify the redis server                                                  | ""               |
+| `--redis-client-cert`(string)          | `REDIS_CLIENT_CERT`            | path to a PEM client certificate for TLS client authentication; requires `--redis-client-key`                                | ""               |
+| `--redis-client-key`(string)           | `REDIS_CLIENT_KEY`             | path to the PEM private key of `--redis-client-cert`                                                                         | ""               |
+| `--max-payload-length`(int)            | `MAX_PAYLOAD_LENGTH`           | maximum number of characters of a payload shown in task lists (task details show it in full)                                 | 200              |
+| `--max-result-length`(int)             | `MAX_RESULT_LENGTH`            | maximum number of characters of a result shown in task lists (task details show it in full)                                  | 200              |
+| `--disable-throughput-collector`(bool) | `DISABLE_THROUGHPUT_COLLECTOR` | do not record the throughput of queues in redis (see [Throughput](#throughput))                                              | false            |
+| `--enable-metrics-exporter`(bool)      | `ENABLE_METRICS_EXPORTER`      | enable prometheus metrics exporter to expose queue metrics                                                                   | false            |
+| `--prometheus-addr`(string)            | `PROMETHEUS_ADDR`              | address of prometheus server to query time series                                                                            | ""               |
+| `--read-only`(bool)                    | `READ_ONLY`                    | use web UI in read-only mode                                                                                                 | false            |
 
 ### Connecting to Redis
 
@@ -108,10 +131,12 @@ To connect to a **single redis server**, use either `--redis-url` or (`--redis-a
 ./asynqdash --redis-addr=localhost:6380 --redis-db=2 --redis-password=mypassword
 ```
 
-To connect to **redis-sentinels**, use `--redis-url`:
+To connect to **redis-sentinels**, use `--redis-url`. The password in the URL authenticates with the sentinels;
+use `--redis-password` (and `--redis-username`) for the master:
 
 ```sh
-./asynqdash --redis-url=redis-sentinel://:mypassword@localhost:5000,localhost:5001,localhost:5002?master=mymaster
+./asynqdash --redis-url=redis-sentinel://:sentinelpassword@localhost:5000,localhost:5001,localhost:5002?master=mymaster \
+  --redis-password=masterpassword
 ```
 
 To connect to a **redis-cluster**, use `--redis-cluster-nodes`:
@@ -119,6 +144,47 @@ To connect to a **redis-cluster**, use `--redis-cluster-nodes`:
 ```sh
 ./asynqdash --redis-cluster-nodes=localhost:7000,localhost:7001,localhost:7002,localhost:7003,localhost:7004,localhost:7006
 ```
+
+To use **TLS** with a private CA or client certificates (e.g. managed Redis services), pass the PEM files:
+
+```sh
+./asynqdash --redis-url=rediss://myredis.example.com:6380 \
+  --redis-ca-cert=ca.pem --redis-client-cert=client.pem --redis-client-key=client-key.pem
+```
+
+### Serving under a sub-path and authentication
+
+Behind a reverse proxy that forwards `https://example.com/asynqdash/` to Asynqdash, set the same path with `--root-path`
+(the proxy must keep the path prefix). Requests to `/` are redirected to the root path.
+
+```sh
+./asynqdash --root-path=/asynqdash
+```
+
+Asynqdash has no user accounts. To require a login, either put it behind an authenticating proxy, or enable HTTP basic
+authentication. `{root-path}/api/health` stays open for health checks.
+
+```sh
+BASIC_AUTH_USERNAME=admin BASIC_AUTH_PASSWORD='a long random password' ./asynqdash
+```
+
+Basic authentication sends the password with every request: serve Asynqdash over HTTPS (e.g. through a proxy).
+
+### Throughput
+
+asynq only keeps a daily count of processed and failed tasks per queue (per UTC date), and does not count enqueued
+tasks. To show recent activity, Asynqdash samples every queue every 10 seconds and records how many tasks were
+enqueued, processed and failed in each minute and each hour. The queue page shows it for the last 60 minutes (per
+minute), 24 hours (per hour), or 7 and 30 days (per day, in the time zone selected in the settings).
+
+- The data is stored in the same Redis, in keys prefixed with `asynqdash:` (a few kilobytes per queue). Minute buckets
+  are kept for 3 hours and hour buckets for 91 days, then expire.
+- Data is only recorded while Asynqdash runs. Several instances can share a Redis: only one of them records each sample.
+- The number of enqueued tasks is estimated from the changes in each queue. Tasks deleted by hand are not counted.
+- With the local time zone, the dashboard also uses the recorded hours to show processed tasks per local day (and
+  "today"), since asynq's own counters are per UTC day. Days before Asynqdash started recording are shown as UTC days.
+
+Use `--disable-throughput-collector` (or `Options.DisableThroughputCollector`) to stop recording.
 
 ### Integration with Prometheus
 
@@ -209,6 +275,8 @@ These endpoints are available under `{RootPath}/api`, in addition to the ones us
 | Method | Path                                    | Description                                                                                                                                                                                   |
 | ------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`  | `/health`                               | `200 {"status":"ok"}` when Redis is reachable, `503` otherwise. Suitable for liveness/readiness probes.                                                                                       |
+| `GET`  | `/throughput`                           | Tasks enqueued, processed and failed per bucket, from the throughput collector. Parameters: `resolution` (`minute`, up to 3 hours, or `hour`, up to 91 days), `duration` (seconds), `queue` (repeatable; default every queue). Each point is `[unix time, enqueued, processed, failed]`. |
+| `GET`  | `/queues/{qname}/{state}_tasks`         | Task lists accept `order=desc` to list the newest tasks first (for scheduled and retry tasks: the latest first). The default, `asc`, keeps the order of asynq.                              |
 | `GET`  | `/queues/{qname}/task_types`            | Number of tasks of each type in the queue, by state. Large queues are sampled (up to 10,000 tasks per state); the response reports whether the counts were truncated.                         |
 | `POST` | `/scheduler_entries/{entry_id}:run`     | Enqueues the task of a periodic scheduler entry right away, with the entry's payload and options. The regular schedule is not affected. Disabled in read-only mode, like every non-GET call. |
 

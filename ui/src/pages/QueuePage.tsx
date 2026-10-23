@@ -1,18 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Breadcrumbs, Button, DropdownMenu, Empty, LayerCard, Select, Table, Tabs, cn } from "@cloudflare/kumo";
+import {
+  Breadcrumbs,
+  Button,
+  DropdownMenu,
+  Empty,
+  LayerCard,
+  Select,
+  Table,
+  Tabs,
+  Tooltip,
+  cn,
+} from "@cloudflare/kumo";
 import {
   ChartBarHorizontalIcon,
+  ChartLineIcon,
   DotsThreeVerticalIcon,
+  InfoIcon,
   PauseIcon,
   PlayIcon,
   TrashIcon,
   TrayIcon,
 } from "@phosphor-icons/react";
 import { READ_ONLY } from "../lib/flags";
-import { useGroups, useQueue, useQueueActions, useTaskTypes } from "../lib/queries";
+import { useGroups, useProcessedToday, useQueue, useQueueActions, useTaskTypes, useThroughput } from "../lib/queries";
+import { useSettings, type ThroughputRange } from "../lib/settings";
+import { isUtcDays, lastDays, sumByDay, sumQueues } from "../lib/throughput";
+import { ThroughputChart } from "../components/lazy-charts";
 import { TASK_STATES, TASK_STATE_META, isTaskState } from "../lib/task-states";
-import { formatBytes, formatCompact, formatNumber, formatPercent, ratio } from "../lib/format";
+import { formatBytes, formatCompact, formatDateTime, formatNumber, formatPercent, ratio } from "../lib/format";
 import { paths } from "../lib/paths";
 import type { Queue, TaskState } from "../lib/types";
 import { Card, ErrorState, LiveNumber, LoadingState, Page, PageHeader, Stat } from "../components/common";
@@ -27,7 +43,13 @@ function defaultState(queue: Queue | undefined): TaskState {
 }
 
 function QueueStats({ queue }: { queue: Queue }) {
-  const errorRate = ratio(queue.failed, queue.processed);
+  const { settings } = useSettings();
+  const queues = useMemo(() => [queue], [queue]);
+  const today = useProcessedToday(queues);
+  const { processed, failed } = today.queues[0];
+  // asynq counts "today" in UTC; say so when the selected time zone has another day.
+  const utcNote = today.source === "utc" && !isUtcDays(settings.timeZone) ? "UTC day" : undefined;
+  const errorRate = ratio(failed, processed);
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       <Stat
@@ -42,11 +64,12 @@ function QueueStats({ queue }: { queue: Queue }) {
         tone={queue.latency_msec > 60_000 ? "warning" : "default"}
       />
       <Stat label="Memory" value={formatBytes(queue.memory_usage_bytes)} hint="Approximate" />
-      <Stat label="Processed today" value={<LiveNumber value={queue.processed} format={formatCompact} />} />
+      <Stat label="Processed today" value={<LiveNumber value={processed} format={formatCompact} />} hint={utcNote} />
       <Stat
         label="Failed today"
-        value={<LiveNumber value={queue.failed} format={formatCompact} />}
-        tone={queue.failed > 0 ? "danger" : "default"}
+        value={<LiveNumber value={failed} format={formatCompact} />}
+        hint={utcNote}
+        tone={failed > 0 ? "danger" : "default"}
       />
       <Stat
         label="Error rate"
@@ -54,6 +77,103 @@ function QueueStats({ queue }: { queue: Queue }) {
         tone={errorRate > 0.05 ? "danger" : errorRate > 0 ? "warning" : "success"}
       />
     </div>
+  );
+}
+
+const THROUGHPUT_RANGES: {
+  value: ThroughputRange;
+  label: string;
+  resolution: "minute" | "hour";
+  bucket: "minute" | "hour" | "day";
+  /** Number of days for day buckets. */
+  days?: number;
+  seconds: number;
+}[] = [
+  { value: "1h", label: "60 min", resolution: "minute", bucket: "minute", seconds: 3_600 },
+  { value: "1d", label: "24 h", resolution: "hour", bucket: "hour", seconds: 86_400 },
+  // One more day than shown, so that the first day is complete in any time zone.
+  { value: "7d", label: "7 days", resolution: "hour", bucket: "day", days: 7, seconds: 8 * 86_400 },
+  { value: "30d", label: "30 days", resolution: "hour", bucket: "day", days: 30, seconds: 31 * 86_400 },
+];
+
+function ThroughputCard({ qname }: { qname: string }) {
+  const { settings, update } = useSettings();
+  const range = THROUGHPUT_RANGES.find((r) => r.value === settings.throughputRange) ?? THROUGHPUT_RANGES[0];
+  const queues = useMemo(() => [qname], [qname]);
+  const { data, error, isLoading, isPlaceholderData, refetch } = useThroughput(range.resolution, range.seconds, queues);
+
+  // Period shown on the time axis, in ms: the requested period, or whole days for day buckets.
+  const { points, start, end } = useMemo(() => {
+    const raw = sumQueues(data, queues);
+    const now = data ? data.end * 1000 : Date.now();
+    if (range.bucket !== "day") {
+      return { points: raw, start: now - range.seconds * 1000, end: now };
+    }
+    const days = lastDays(range.days ?? 1, settings.timeZone, now);
+    return {
+      points: sumByDay(raw, settings.timeZone).filter((p) => p.time >= days[0]),
+      start: days[0],
+      end: days[days.length - 1],
+    };
+  }, [data, queues, range, settings.timeZone]);
+
+  const totals = points.reduce(
+    (acc, p) => ({
+      enqueued: acc.enqueued + p.enqueued,
+      processed: acc.processed + p.processed,
+      failed: acc.failed + p.failed,
+    }),
+    { enqueued: 0, processed: 0, failed: 0 },
+  );
+  // The collector may have started recording after the beginning of the period.
+  const firstRecorded = points.length > 0 && data ? points[0].time : null;
+  const partial = firstRecorded !== null && firstRecorded > start + (range.bucket === "minute" ? 120_000 : 7_200_000);
+
+  return (
+    <Card
+      title={
+        <span className="flex items-center gap-1.5">
+          Throughput
+          <Tooltip content="Tasks that entered this queue and tasks processed, recorded by Asynqdash every 10 seconds. Enqueued tasks are estimated from the changes in the queue: tasks deleted by hand are not counted.">
+            <InfoIcon className="text-kumo-subtle" />
+          </Tooltip>
+        </span>
+      }
+      description={
+        points.length > 0
+          ? `${formatNumber(totals.enqueued)} enqueued · ${formatNumber(totals.processed - totals.failed)} succeeded · ${formatNumber(totals.failed)} failed${partial ? ` · since ${formatDateTime(new Date(firstRecorded), settings.timeZone)}` : ""}`
+          : `Per ${range.bucket}`
+      }
+      actions={
+        <Tabs
+          size="sm"
+          value={range.value}
+          onValueChange={(v) => update({ throughputRange: v as ThroughputRange })}
+          tabs={THROUGHPUT_RANGES.map((r) => ({ value: r.value, label: r.label }))}
+        />
+      }
+    >
+      {error && !data ? (
+        <ErrorState title="Could not load the throughput" error={error} onRetry={() => refetch()} />
+      ) : isLoading ? (
+        <LoadingState className="h-[240px]" />
+      ) : points.length === 0 ? (
+        <Empty
+          size="sm"
+          icon={<ChartLineIcon size={28} />}
+          title="No throughput recorded yet"
+          description={
+            data?.collector_enabled === false
+              ? "This Asynqdash instance does not record throughput (it runs with --disable-throughput-collector)."
+              : "Asynqdash records how many tasks are enqueued and processed every 10 seconds while it runs. Data appears within a minute."
+          }
+        />
+      ) : (
+        <div className={cn("transition-opacity", isPlaceholderData && "opacity-60")}>
+          <ThroughputChart points={points} bucket={range.bucket} start={start} end={end} />
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -333,6 +453,8 @@ export function QueuePage() {
 
       <QueueStats queue={queue} />
       <StateDistributionBar queue={queue} className="h-2" />
+
+      <ThroughputCard qname={qname} />
 
       <LayerCard className="min-w-0 overflow-hidden p-0">
         <div className="overflow-x-auto border-b border-kumo-hairline px-2 pt-1">

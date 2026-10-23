@@ -1,18 +1,32 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
-import { Badge, Button, DropdownMenu, Empty, InputGroup, Link, Pagination, Table, Tooltip, cn } from "@cloudflare/kumo";
+import {
+  Badge,
+  Button,
+  DropdownMenu,
+  Empty,
+  InputGroup,
+  Link,
+  Pagination,
+  Select,
+  Table,
+  Tooltip,
+  cn,
+} from "@cloudflare/kumo";
 import {
   CaretDownIcon,
   DotsThreeIcon,
   FunnelSimpleIcon,
   MagnifyingGlassIcon,
+  SortAscendingIcon,
+  SortDescendingIcon,
   WarningIcon,
   XIcon,
 } from "@phosphor-icons/react";
 import type { TaskInfo, TaskState } from "../../lib/types";
 import { READ_ONLY } from "../../lib/flags";
 import { useTaskList } from "../../lib/queries";
-import { PAGE_SIZE_OPTIONS, useSettings } from "../../lib/settings";
+import { PAGE_SIZE_OPTIONS, useSettings, type TaskOrder } from "../../lib/settings";
 import { ACTION_LABELS, TASK_STATE_META } from "../../lib/task-states";
 import { formatDuration, formatNumber, payloadPreview, pluralize, shortId } from "../../lib/format";
 import { taskPath } from "../../lib/paths";
@@ -113,6 +127,43 @@ function stateColumns(state: TaskState): Column[] {
   }
 }
 
+function OrderSelect({
+  state,
+  value,
+  onChange,
+}: {
+  state: TaskState;
+  value: TaskOrder;
+  onChange: (order: TaskOrder) => void;
+}) {
+  const { order } = TASK_STATE_META[state];
+  const Icon = value === "desc" ? SortDescendingIcon : SortAscendingIcon;
+  return (
+    <Tooltip
+      content={`Sorted by ${order.by}`}
+      render={
+        <span>
+          <Select
+            aria-label="Sort order"
+            size="sm"
+            value={value}
+            onValueChange={(v) => onChange(v as TaskOrder)}
+            renderValue={(v: unknown) => (
+              <span className="flex items-center gap-1.5">
+                <Icon className="text-kumo-subtle" />
+                {order[v as TaskOrder]}
+              </span>
+            )}
+          >
+            <Select.Option value="desc">{order.desc}</Select.Option>
+            <Select.Option value="asc">{order.asc}</Select.Option>
+          </Select>
+        </span>
+      }
+    />
+  );
+}
+
 function usePageParam(): [number, (page: number) => void] {
   const [params, setParams] = useSearchParams();
   const page = Math.max(1, parseInt(params.get("page") ?? "1", 10) || 1);
@@ -144,7 +195,15 @@ export function TaskTable({ qname, state, totalCount, group }: TaskTableProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
   const [previewId, setPreviewId] = useState<string | null>(null);
-  const { data, error, isLoading, isPlaceholderData, refetch } = useTaskList(qname, state, page, pageSize, group);
+  const order = settings.taskOrder;
+  const { data, error, isLoading, isPlaceholderData, refetch } = useTaskList(
+    qname,
+    state,
+    page,
+    pageSize,
+    order,
+    group,
+  );
   const meta = TASK_STATE_META[state];
   const runner = useTaskActionRunner(qname, state, group, () => setSelected(new Set()));
 
@@ -156,7 +215,7 @@ export function TaskTable({ qname, state, totalCount, group }: TaskTableProps) {
   // Reset selection and filter when the list context changes.
   useEffect(() => {
     setSelected(new Set());
-  }, [qname, state, group, page, pageSize]);
+  }, [qname, state, group, page, pageSize, order]);
   useEffect(() => {
     setFilter("");
   }, [qname, state, group]);
@@ -294,6 +353,14 @@ export function TaskTable({ qname, state, totalCount, group }: TaskTableProps) {
                 </InputGroup.Addon>
               )}
             </InputGroup>
+            <OrderSelect
+              state={state}
+              value={order}
+              onChange={(o) => {
+                update({ taskOrder: o });
+                setPage(1);
+              }}
+            />
             {canAct && (
               <div className="ml-auto">
                 <DropdownMenu>
