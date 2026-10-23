@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
 	"crypto/subtle"
 	"fmt"
 	"net"
@@ -40,9 +39,7 @@ func (w *responseRecorderWriter) Write(b []byte) (int, error) {
 // basicAuthMiddleware requires HTTP basic authentication with the given credentials,
 // except for the paths in public.
 func basicAuthMiddleware(h http.Handler, username, password string, public ...string) http.Handler {
-	// Comparing hashes keeps the comparison constant-time regardless of the input length.
-	wantUser := sha256.Sum256([]byte(username))
-	wantPass := sha256.Sum256([]byte(password))
+	wantUser, wantPass := []byte(username), []byte(password)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for _, p := range public {
 			if r.URL.Path == p {
@@ -52,11 +49,11 @@ func basicAuthMiddleware(h http.Handler, username, password string, public ...st
 		}
 		user, pass, ok := r.BasicAuth()
 		if ok {
-			gotUser := sha256.Sum256([]byte(user))
-			gotPass := sha256.Sum256([]byte(pass))
-			userOK := subtle.ConstantTimeCompare(gotUser[:], wantUser[:]) == 1
-			passOK := subtle.ConstantTimeCompare(gotPass[:], wantPass[:]) == 1
-			if userOK && passOK {
+			// Constant-time comparisons (only the lengths can be inferred from the timing),
+			// and both are always evaluated so that a valid username is not revealed.
+			userOK := subtle.ConstantTimeCompare([]byte(user), wantUser)
+			passOK := subtle.ConstantTimeCompare([]byte(pass), wantPass)
+			if userOK&passOK == 1 {
 				h.ServeHTTP(w, r)
 				return
 			}
