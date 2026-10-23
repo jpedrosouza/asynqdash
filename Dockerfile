@@ -3,7 +3,8 @@
 # Building the frontend.
 #
 
-FROM node:22-alpine AS frontend
+# The assets do not depend on the target platform: build them once, natively.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 
 WORKDIR /static
 
@@ -20,7 +21,12 @@ RUN npm run build
 # Building the backend.
 #
 
-FROM golang:1.23-alpine AS backend
+# Go cross-compiles for the target platform, so this stage also runs natively.
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS backend
+
+# Set by buildx for each platform of a multi-platform build (e.g. linux/arm64).
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
 
 WORKDIR /build
 
@@ -35,11 +41,8 @@ COPY . .
 RUN rm -rf ui/build
 COPY --from=frontend ["/static/build", "ui/build"]
 
-# Set necessary environment variables needed for the image and build the server.
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-
 # Run go build (with ldflags to reduce binary size).
-RUN go build -ldflags="-s -w" -o asynqdash ./cmd/asynqdash
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o asynqdash ./cmd/asynqdash
 
 #
 # Third stage:

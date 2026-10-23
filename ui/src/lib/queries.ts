@@ -1,11 +1,13 @@
 import { keepPreviousData, QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "./api";
 import type { TaskAction } from "./api";
-import { useRefetchInterval } from "./settings";
+import { useMemo } from "react";
+import { useRefetchInterval, useSettings } from "./settings";
+import { isUtcDays, processedToday } from "./throughput";
 import { ACTION_LABELS } from "./task-states";
 import { notifyError, notifySuccess } from "./toast";
 import { pluralize } from "./format";
-import type { BatchResponse, TaskState } from "./types";
+import type { BatchResponse, Queue, TaskState, ThroughputResolution } from "./types";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,8 +24,14 @@ export const keys = {
   queues: ["queues"] as const,
   queueStats: ["queue-stats"] as const,
   tasks: (qname: string) => ["tasks", qname] as const,
-  taskList: (qname: string, state: TaskState, group: string | undefined, page: number, size: number) =>
-    ["tasks", qname, state, group ?? "", page, size] as const,
+  taskList: (
+    qname: string,
+    state: TaskState,
+    group: string | undefined,
+    page: number,
+    size: number,
+    order: api.ListOrder,
+  ) => ["tasks", qname, state, group ?? "", page, size, order] as const,
   task: (qname: string, id: string) => ["task", qname, id] as const,
   groups: (qname: string) => ["groups", qname] as const,
   taskTypes: (qname: string) => ["task-types", qname] as const,
@@ -31,6 +39,8 @@ export const keys = {
   schedulerEntries: ["scheduler-entries"] as const,
   enqueueEvents: (id: string, page: number) => ["enqueue-events", id, page] as const,
   redis: ["redis"] as const,
+  throughput: (resolution: ThroughputResolution, duration: number, queues: string[]) =>
+    ["throughput", resolution, duration, queues] as const,
   metrics: (end: number, duration: number, queues: string[]) => ["metrics", end, duration, queues] as const,
 };
 
@@ -55,15 +65,55 @@ export function useQueueStats() {
   });
 }
 
-export function useTaskList(qname: string, state: TaskState, page: number, size: number, group?: string) {
+export function useTaskList(
+  qname: string,
+  state: TaskState,
+  page: number,
+  size: number,
+  order: api.ListOrder,
+  group?: string,
+) {
   const refetchInterval = useRefetchInterval();
   return useQuery({
-    queryKey: keys.taskList(qname, state, group, page, size),
-    queryFn: () => api.listTasks(qname, state, { page, size }, group),
+    queryKey: keys.taskList(qname, state, group, page, size, order),
+    queryFn: () => api.listTasks(qname, state, { page, size }, order, group),
     refetchInterval,
     placeholderData: keepPreviousData,
     enabled: state !== "aggregating" || !!group,
   });
+}
+
+/** Throughput of the given queues (every queue when empty). Refreshed at most once per 10s, like the collector. */
+export function useThroughput(
+  resolution: ThroughputResolution,
+  durationSeconds: number,
+  queues: string[] = [],
+  enabled = true,
+) {
+  const refetchInterval = useRefetchInterval();
+  return useQuery({
+    queryKey: keys.throughput(resolution, durationSeconds, queues),
+    queryFn: () => api.getThroughput(resolution, durationSeconds, queues),
+    refetchInterval:
+      refetchInterval === false ? false : Math.max(refetchInterval, resolution === "hour" ? 60_000 : 10_000),
+    staleTime: 5_000,
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/**
+ * Processed and failed tasks of each queue today, in the selected time zone (see processedToday).
+ * The hourly throughput is only fetched when days in that time zone differ from UTC days.
+ */
+export function useProcessedToday(queues: Queue[]) {
+  const { settings } = useSettings();
+  const local = !isUtcDays(settings.timeZone);
+  const hourly = useThroughput("hour", 86_400, [], local);
+  return useMemo(
+    () => processedToday(queues, local ? hourly.data : undefined, settings.timeZone),
+    [queues, local, hourly.data, settings.timeZone],
+  );
 }
 
 export function useTask(qname: string, id: string) {

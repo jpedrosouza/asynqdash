@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   PAGE_SIZE_OPTIONS,
   useSettings,
+  type TaskOrder,
   type ThemePreference,
   type TimeZonePreference,
 } from "../lib/settings";
@@ -62,7 +63,12 @@ export function SettingsPage() {
           </SettingRow>
           <SettingRow
             title="Time zone"
-            description={<>Used for absolute timestamps. Example: {formatDateTime(new Date(), settings.timeZone)}</>}
+            description={
+              <>
+                Used for timestamps, charts and &ldquo;today&rdquo;. Example:{" "}
+                {formatDateTime(new Date(), settings.timeZone)}
+              </>
+            }
           >
             <Tabs
               size="sm"
@@ -112,6 +118,17 @@ export function SettingsPage() {
                 </Select.Option>
               ))}
             </Select>
+          </SettingRow>
+          <SettingRow title="Task order" description="Order of task tables. It can also be changed above each table.">
+            <Tabs
+              size="sm"
+              value={settings.taskOrder}
+              onValueChange={(v) => update({ taskOrder: v as TaskOrder })}
+              tabs={[
+                { value: "desc", label: "Newest first" },
+                { value: "asc", label: "Oldest first" },
+              ]}
+            />
           </SettingRow>
         </div>
       </Card>

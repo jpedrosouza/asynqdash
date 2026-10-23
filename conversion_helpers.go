@@ -64,6 +64,40 @@ var DefaultResultFormatter = ResultFormatterFunc(func(_ string, result []byte) s
 	return string(result)
 })
 
+// truncatingPayloadFormatter returns a PayloadFormatter that truncates the output of f to limit characters.
+// A limit of zero or less returns f unchanged.
+func truncatingPayloadFormatter(f PayloadFormatter, limit int) PayloadFormatter {
+	if limit <= 0 {
+		return f
+	}
+	return PayloadFormatterFunc(func(taskType string, payload []byte) string {
+		return truncate(f.FormatPayload(taskType, payload), limit)
+	})
+}
+
+// truncatingResultFormatter returns a ResultFormatter that truncates the output of f to limit characters.
+// A limit of zero or less returns f unchanged.
+func truncatingResultFormatter(f ResultFormatter, limit int) ResultFormatter {
+	if limit <= 0 {
+		return f
+	}
+	return ResultFormatterFunc(func(taskType string, result []byte) string {
+		return truncate(f.FormatResult(taskType, result), limit)
+	})
+}
+
+// truncate truncates s to limit characters (runes), adding an ellipsis when it is cut.
+func truncate(s string, limit int) string {
+	i := 0
+	for pos := range s {
+		if i == limit {
+			return s[:pos] + "…"
+		}
+		i++
+	}
+	return s
+}
+
 // isPrintable reports whether the given data is comprised of all printable runes.
 // Line breaks and tabs are considered printable so that multi-line payloads
 // (e.g. pretty-printed JSON) are displayed as is.

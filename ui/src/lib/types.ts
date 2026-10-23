@@ -22,6 +22,22 @@ export interface Queue {
   timestamp: string;
 }
 
+export type ThroughputResolution = "minute" | "hour";
+
+/** [bucket start (unix seconds), enqueued, processed (including failed), failed]. */
+export type ThroughputPoint = [number, number, number, number];
+
+export interface ThroughputResponse {
+  resolution: ThroughputResolution;
+  /** Requested period, in unix seconds. */
+  start: number;
+  end: number;
+  /** Whether this asynqdash instance records throughput. */
+  collector_enabled: boolean;
+  /** Points of each queue, sorted by time. Buckets the collector did not observe are omitted. */
+  queues: Record<string, ThroughputPoint[]>;
+}
+
 export interface DailyStat {
   queue: string;
   date: string;

@@ -30,13 +30,14 @@ func newListActiveTasksHandlerFunc(inspector *asynq.Inspector, pf PayloadFormatt
 		qname := vars["qname"]
 		pageSize, pageNum := getPageOptions(r)
 
-		tasks, err := inspector.ListActiveTasks(
-			qname, asynq.PageSize(pageSize), asynq.Page(pageNum))
+		qinfo, err := inspector.GetQueueInfo(qname)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		qinfo, err := inspector.GetQueueInfo(qname)
+		tasks, err := listTasksInOrder(func(opts ...asynq.ListOption) ([]*asynq.TaskInfo, error) {
+			return inspector.ListActiveTasks(qname, opts...)
+		}, qinfo.Active, pageSize, pageNum, getListOrder(r))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -155,13 +156,14 @@ func newListPendingTasksHandlerFunc(inspector *asynq.Inspector, pf PayloadFormat
 		vars := mux.Vars(r)
 		qname := vars["qname"]
 		pageSize, pageNum := getPageOptions(r)
-		tasks, err := inspector.ListPendingTasks(
-			qname, asynq.PageSize(pageSize), asynq.Page(pageNum))
+		qinfo, err := inspector.GetQueueInfo(qname)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		qinfo, err := inspector.GetQueueInfo(qname)
+		tasks, err := listTasksInOrder(func(opts ...asynq.ListOption) ([]*asynq.TaskInfo, error) {
+			return inspector.ListPendingTasks(qname, opts...)
+		}, qinfo.Pending, pageSize, pageNum, getListOrder(r))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -183,13 +185,14 @@ func newListScheduledTasksHandlerFunc(inspector *asynq.Inspector, pf PayloadForm
 		vars := mux.Vars(r)
 		qname := vars["qname"]
 		pageSize, pageNum := getPageOptions(r)
-		tasks, err := inspector.ListScheduledTasks(
-			qname, asynq.PageSize(pageSize), asynq.Page(pageNum))
+		qinfo, err := inspector.GetQueueInfo(qname)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		qinfo, err := inspector.GetQueueInfo(qname)
+		tasks, err := listTasksInOrder(func(opts ...asynq.ListOption) ([]*asynq.TaskInfo, error) {
+			return inspector.ListScheduledTasks(qname, opts...)
+		}, qinfo.Scheduled, pageSize, pageNum, getListOrder(r))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -211,13 +214,14 @@ func newListRetryTasksHandlerFunc(inspector *asynq.Inspector, pf PayloadFormatte
 		vars := mux.Vars(r)
 		qname := vars["qname"]
 		pageSize, pageNum := getPageOptions(r)
-		tasks, err := inspector.ListRetryTasks(
-			qname, asynq.PageSize(pageSize), asynq.Page(pageNum))
+		qinfo, err := inspector.GetQueueInfo(qname)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		qinfo, err := inspector.GetQueueInfo(qname)
+		tasks, err := listTasksInOrder(func(opts ...asynq.ListOption) ([]*asynq.TaskInfo, error) {
+			return inspector.ListRetryTasks(qname, opts...)
+		}, qinfo.Retry, pageSize, pageNum, getListOrder(r))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -239,13 +243,14 @@ func newListArchivedTasksHandlerFunc(inspector *asynq.Inspector, pf PayloadForma
 		vars := mux.Vars(r)
 		qname := vars["qname"]
 		pageSize, pageNum := getPageOptions(r)
-		tasks, err := inspector.ListArchivedTasks(
-			qname, asynq.PageSize(pageSize), asynq.Page(pageNum))
+		qinfo, err := inspector.GetQueueInfo(qname)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		qinfo, err := inspector.GetQueueInfo(qname)
+		tasks, err := listTasksInOrder(func(opts ...asynq.ListOption) ([]*asynq.TaskInfo, error) {
+			return inspector.ListArchivedTasks(qname, opts...)
+		}, qinfo.Archived, pageSize, pageNum, getListOrder(r))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -267,12 +272,14 @@ func newListCompletedTasksHandlerFunc(inspector *asynq.Inspector, pf PayloadForm
 		vars := mux.Vars(r)
 		qname := vars["qname"]
 		pageSize, pageNum := getPageOptions(r)
-		tasks, err := inspector.ListCompletedTasks(qname, asynq.PageSize(pageSize), asynq.Page(pageNum))
+		qinfo, err := inspector.GetQueueInfo(qname)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		qinfo, err := inspector.GetQueueInfo(qname)
+		tasks, err := listTasksInOrder(func(opts ...asynq.ListOption) ([]*asynq.TaskInfo, error) {
+			return inspector.ListCompletedTasks(qname, opts...)
+		}, qinfo.Completed, pageSize, pageNum, getListOrder(r))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -295,18 +302,25 @@ func newListAggregatingTasksHandlerFunc(inspector *asynq.Inspector, pf PayloadFo
 		qname := vars["qname"]
 		gname := vars["gname"]
 		pageSize, pageNum := getPageOptions(r)
-		tasks, err := inspector.ListAggregatingTasks(
-			qname, gname, asynq.PageSize(pageSize), asynq.Page(pageNum))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 		qinfo, err := inspector.GetQueueInfo(qname)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		groups, err := inspector.Groups(qname)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		groupSize := 0
+		for _, g := range groups {
+			if g.Group == gname {
+				groupSize = g.Size
+			}
+		}
+		tasks, err := listTasksInOrder(func(opts ...asynq.ListOption) ([]*asynq.TaskInfo, error) {
+			return inspector.ListAggregatingTasks(qname, gname, opts...)
+		}, groupSize, pageSize, pageNum, getListOrder(r))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -717,6 +731,65 @@ func getPageOptions(r *http.Request) (pageSize, pageNum int) {
 		}
 	}
 	return pageSize, pageNum
+}
+
+// getListOrder reads the order of task lists from the request url.
+// "desc" lists the newest tasks first; anything else keeps the order of asynq (oldest first).
+func getListOrder(r *http.Request) string {
+	if r.URL.Query().Get("order") == "desc" {
+		return "desc"
+	}
+	return "asc"
+}
+
+// listTasksInOrder returns a page of tasks in the given order ("asc" or "desc").
+//
+// asynq lists tasks oldest first: pending and active tasks in the order they were added,
+// and tasks in sorted sets (scheduled, retry, archived, completed, aggregating) by score.
+// A newest-first page is the mirror range of the oldest-first list, which spans at most two
+// asynq pages; total is the number of tasks in the list.
+func listTasksInOrder(list func(opts ...asynq.ListOption) ([]*asynq.TaskInfo, error), total, pageSize, pageNum int, order string) ([]*asynq.TaskInfo, error) {
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageNum <= 0 {
+		pageNum = 1
+	}
+	if order != "desc" {
+		return list(asynq.PageSize(pageSize), asynq.Page(pageNum))
+	}
+	// Range [start, end) of the oldest-first list.
+	end := total - (pageNum-1)*pageSize
+	if end <= 0 {
+		return nil, nil
+	}
+	start := end - pageSize
+	if start < 0 {
+		start = 0
+	}
+	firstPage, lastPage := start/pageSize+1, (end-1)/pageSize+1
+	var tasks []*asynq.TaskInfo
+	for p := firstPage; p <= lastPage; p++ {
+		page, err := list(asynq.PageSize(pageSize), asynq.Page(p))
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, page...)
+	}
+	// The list may have shrunk since total was read.
+	offset := start - (firstPage-1)*pageSize
+	if offset > len(tasks) {
+		offset = len(tasks)
+	}
+	limit := offset + (end - start)
+	if limit > len(tasks) {
+		limit = len(tasks)
+	}
+	tasks = tasks[offset:limit]
+	for i, j := 0, len(tasks)-1; i < j; i, j = i+1, j-1 {
+		tasks[i], tasks[j] = tasks[j], tasks[i]
+	}
+	return tasks, nil
 }
 
 func newGetTaskHandlerFunc(inspector *asynq.Inspector, pf PayloadFormatter, rf ResultFormatter) http.HandlerFunc {

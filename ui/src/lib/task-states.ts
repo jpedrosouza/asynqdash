@@ -29,6 +29,8 @@ export interface TaskStateMeta {
   actions: TaskAction[];
   /** Actions available for every task in the state at once. */
   allActions: TaskAction[];
+  /** How tasks of this state are sorted, and the labels of both directions. */
+  order: { by: string; desc: string; asc: string };
 }
 
 export const TASK_STATES: TaskStateMeta[] = [
@@ -42,6 +44,7 @@ export const TASK_STATES: TaskStateMeta[] = [
     colorVar: "--color-kumo-info",
     actions: ["cancel"],
     allActions: ["cancel"],
+    order: { by: "start order", desc: "Newest first", asc: "Oldest first" },
   },
   {
     state: "pending",
@@ -53,6 +56,7 @@ export const TASK_STATES: TaskStateMeta[] = [
     colorVar: "--color-kumo-badge-neutral",
     actions: ["archive", "delete"],
     allActions: ["archive", "delete"],
+    order: { by: "enqueue order", desc: "Newest first", asc: "Oldest first" },
   },
   {
     state: "aggregating",
@@ -64,6 +68,7 @@ export const TASK_STATES: TaskStateMeta[] = [
     colorVar: "--color-kumo-badge-purple",
     actions: ["run", "archive", "delete"],
     allActions: ["run", "archive", "delete"],
+    order: { by: "time added to the group", desc: "Newest first", asc: "Oldest first" },
   },
   {
     state: "scheduled",
@@ -75,6 +80,7 @@ export const TASK_STATES: TaskStateMeta[] = [
     colorVar: "--color-kumo-badge-teal",
     actions: ["run", "archive", "delete"],
     allActions: ["run", "archive", "delete"],
+    order: { by: "scheduled time", desc: "Latest first", asc: "Soonest first" },
   },
   {
     state: "retry",
@@ -86,6 +92,7 @@ export const TASK_STATES: TaskStateMeta[] = [
     colorVar: "--color-kumo-warning",
     actions: ["run", "archive", "delete"],
     allActions: ["run", "archive", "delete"],
+    order: { by: "next retry time", desc: "Latest first", asc: "Soonest first" },
   },
   {
     state: "archived",
@@ -97,6 +104,7 @@ export const TASK_STATES: TaskStateMeta[] = [
     colorVar: "--color-kumo-danger",
     actions: ["run", "delete"],
     allActions: ["run", "delete"],
+    order: { by: "archive time", desc: "Newest first", asc: "Oldest first" },
   },
   {
     state: "completed",
@@ -108,6 +116,7 @@ export const TASK_STATES: TaskStateMeta[] = [
     colorVar: "--color-kumo-success",
     actions: ["delete"],
     allActions: ["delete"],
+    order: { by: "completion time", desc: "Newest first", asc: "Oldest first" },
   },
 ];
 

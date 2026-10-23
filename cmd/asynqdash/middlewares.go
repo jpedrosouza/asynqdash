@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"net"
 	"net/http"
@@ -33,6 +34,33 @@ func (w *responseRecorderWriter) Write(b []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(b)
 	w.size += n
 	return n, err
+}
+
+// basicAuthMiddleware requires HTTP basic authentication with the given credentials,
+// except for the paths in public.
+func basicAuthMiddleware(h http.Handler, username, password string, public ...string) http.Handler {
+	wantUser, wantPass := []byte(username), []byte(password)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, p := range public {
+			if r.URL.Path == p {
+				h.ServeHTTP(w, r)
+				return
+			}
+		}
+		user, pass, ok := r.BasicAuth()
+		if ok {
+			// Constant-time comparisons (only the lengths can be inferred from the timing),
+			// and both are always evaluated so that a valid username is not revealed.
+			userOK := subtle.ConstantTimeCompare([]byte(user), wantUser)
+			passOK := subtle.ConstantTimeCompare([]byte(pass), wantPass)
+			if userOK&passOK == 1 {
+				h.ServeHTTP(w, r)
+				return
+			}
+		}
+		w.Header().Set("WWW-Authenticate", `Basic realm="Asynqdash", charset="UTF-8"`)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	})
 }
 
 func loggingMiddleware(h http.Handler) http.Handler {

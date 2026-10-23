@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-23
+
+First stable release of Asynqdash.
+
+### Added
+
+- (ui): Throughput of each queue on the queue page: tasks enqueued, succeeded and failed per minute (last 60 minutes),
+  per hour (24 hours) or per day (7 and 30 days).
+- (pkg): Throughput collector. Asynqdash samples every queue every 10 seconds and records the activity per minute
+  (kept 3 hours) and per hour (kept 91 days) in redis keys prefixed with `asynqdash:`. Several instances can share
+  a redis. Disable it with `Options.DisableThroughputCollector` or `--disable-throughput-collector`.
+- (pkg): `GET /api/throughput` endpoint.
+- (pkg): `order=desc` parameter for task lists, to list the newest tasks first.
+- (ui): Task tables have a sort order switch (newest or oldest first), also available in the settings.
+- (pkg): `Options.MaxPayloadLength` and `Options.MaxResultLength` shorten payloads and results in task lists only.
+- (cmd): `--root-path` / `ROOT_PATH` to serve the UI under a sub-path, e.g. behind a reverse proxy (asynqmon#308, #259).
+- (cmd): HTTP basic authentication with `--basic-auth-username` and `--basic-auth-password` (asynqmon#313, #285).
+- (cmd): `--redis-username` / `REDIS_USERNAME` for redis ACL users, e.g. AWS MemoryDB (asynqmon#274, #328, #347).
+- (cmd): `--redis-ca-cert`, `--redis-client-cert` and `--redis-client-key` for TLS with a custom CA and client
+  certificates (asynqmon#322, #341).
+- (cmd): Docker images for linux/arm64 in addition to linux/amd64 (asynqmon#291, #269, #280, #319).
+
+### Changed
+
+- (ui): Task lists show the newest tasks first by default.
+- (ui): The logo reads "Asynqdash", with a capital A.
+- (ui): With the local time zone, "processed today" and the daily "Tasks processed" chart use local days, rebuilt
+  from the throughput collector; asynq records days in UTC. Days without collected data are labelled as UTC days.
+- (pkg): The queue list fetches queue stats concurrently, so it stays fast with many queues (asynqmon#353).
+- (cmd): With a redis-sentinel URL, `--redis-password` (and `--redis-username`) now authenticate with the master;
+  the password in the URL still authenticates with the sentinels (asynqmon#271).
+- (cmd): Spaces and empty entries in `--redis-cluster-nodes` are ignored.
+
+### Fixed
+
+- (ui): Charts ignored the local time zone setting and always used UTC days.
+- (cmd): Task details showed payloads and results truncated to `--max-payload-length` / `--max-result-length`.
+- (ui): The web app manifest could not be loaded behind basic authentication.
+
 ## [0.9.0] - 2026-10-22
 
 ### Changed

@@ -30,7 +30,7 @@ export function LogoMark({ className }: { className?: string }) {
   );
 }
 
-/** Full Asynqdash logo: mark and wordmark. "asynq" follows the current text color. */
+/** Full Asynqdash logo: mark and wordmark. "Asynq" follows the current text color. */
 export function Logo({ className }: { className?: string }) {
   return (
     <svg viewBox={LOGO_VIEWBOX} className={cn("text-kumo-default", className)} role="img" aria-label="Asynqdash">
