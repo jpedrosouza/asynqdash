@@ -37,7 +37,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
 
       # The UI is embedded from the committed ui/build (CI checks that it matches the sources),
       # so the binaries contain exactly what `go get` users get.

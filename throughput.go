@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hibiken/asynq"
+	"github.com/jpedrosouza/asynq"
 	"github.com/redis/go-redis/v9"
 )
 

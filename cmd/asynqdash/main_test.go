@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/hibiken/asynq"
+	"github.com/jpedrosouza/asynq"
 )
 
 func TestParseFlags(t *testing.T) {

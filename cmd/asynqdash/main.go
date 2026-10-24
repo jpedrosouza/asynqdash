@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hibiken/asynq"
-	"github.com/hibiken/asynq/x/metrics"
+	"github.com/jpedrosouza/asynq"
+	"github.com/jpedrosouza/asynq/x/metrics"
 	"github.com/jpedrosouza/asynqdash"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
