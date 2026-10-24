@@ -22,7 +22,7 @@ RUN npm run build
 #
 
 # Go cross-compiles for the target platform, so this stage also runs natively.
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS backend
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend
 
 # Set by buildx for each platform of a multi-platform build (e.g. linux/arm64).
 ARG TARGETOS=linux

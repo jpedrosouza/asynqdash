@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-24
+
+### Changed
+
+- (pkg): Built on [github.com/jpedrosouza/asynq](https://github.com/jpedrosouza/asynq) v0.27.1, a maintained fork of
+  github.com/hibiken/asynq, instead of the original. The data in Redis is the same. Applications that mount Asynqdash
+  must import `github.com/jpedrosouza/asynq` as well: a binary that links both modules panics at startup, since they
+  register the same protobuf types. Stay on v1.0.0 to keep using hibiken/asynq.
+- (pkg): Running tasks from the UI (one, or all scheduled, retry, archived or aggregating ones) and resuming a queue now
+  wake the servers that wait for tasks with the fork's `BlockingDequeue`, instead of leaving the tasks to their next
+  check.
+- Requires Go 1.24, like the asynq fork; the CI, release and Docker builds use it.
+
 ## [1.0.0] - 2026-10-23
 
 First stable release of Asynqdash.

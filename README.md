@@ -5,11 +5,11 @@
   </picture>
 </p>
 
-# Web console for monitoring & administering [Asynq](https://github.com/hibiken/asynq) task queues
+# Web console for monitoring & administering [Asynq](https://github.com/jpedrosouza/asynq) task queues
 
 ## Overview
 
-Asynqdash is a web UI for monitoring and administering [Asynq](https://github.com/hibiken/asynq) queues and tasks.
+Asynqdash is a web UI for monitoring and administering [Asynq](https://github.com/jpedrosouza/asynq) queues and tasks.
 It supports integration with [Prometheus](https://prometheus.io) to display time-series data.
 
 Asynqdash is both a library that you can mount in your Go web application, and a binary that you can install and run.
@@ -19,6 +19,11 @@ Asynqdash is both a library that you can mount in your Go web application, and a
 > Asynqdash started as a fork of [hibiken/asynqmon](https://github.com/hibiken/asynqmon) and is maintained independently.
 > It ships a redesigned web UI and fixes for long-standing issues, and keeps asynqmon's Go API shape
 > (`New`, `Options`) and command-line flags. It is not affiliated with or endorsed by the Asynq project.
+>
+> Since v1.1.0 it is built on [jpedrosouza/asynq](https://github.com/jpedrosouza/asynq), a maintained fork of
+> [hibiken/asynq](https://github.com/hibiken/asynq) with the same data in Redis. An application that mounts Asynqdash
+> must import `github.com/jpedrosouza/asynq` too: both modules register the same protobuf types, so a binary that links
+> both panics at startup (`proto: file "asynq.proto" is already registered`). Use Asynqdash v1.0.0 with hibiken/asynq.
 
 ## What's new compared to asynqmon
 
@@ -104,7 +109,7 @@ _Note_: Use `--redis-url` to specify address, db number, and password with one f
 | `--root-path`(string)                  | `ROOT_PATH`                    | URL path under which the web UI and the API are served, e.g. `/asynqdash` behind a reverse proxy                             | "/"              |
 | `--basic-auth-username`(string)        | `BASIC_AUTH_USERNAME`          | username for HTTP basic authentication; requires `--basic-auth-password`                                                     | ""               |
 | `--basic-auth-password`(string)        | `BASIC_AUTH_PASSWORD`          | password for HTTP basic authentication; requires `--basic-auth-username`                                                     | ""               |
-| `--redis-url`(string)                  | `REDIS_URL`                    | URL to redis or sentinel server. See [godoc](https://pkg.go.dev/github.com/hibiken/asynq#ParseRedisURI) for supported format | ""               |
+| `--redis-url`(string)                  | `REDIS_URL`                    | URL to redis or sentinel server. See [godoc](https://pkg.go.dev/github.com/jpedrosouza/asynq#ParseRedisURI) for supported format | ""               |
 | `--redis-addr`(string)                 | `REDIS_ADDR`                   | address of redis server to connect to                                                                                        | "127.0.0.1:6379" |
 | `--redis-db`(int)                      | `REDIS_DB`                     | redis database number                                                                                                        | 0                |
 | `--redis-username`(string)             | `REDIS_USERNAME`               | username to use when connecting to redis server (Redis ACL)                                                                  | ""               |
@@ -203,7 +208,7 @@ Then pass the address of the Prometheus server with `--prometheus-addr` to enabl
 go get github.com/jpedrosouza/asynqdash
 ```
 
-Projects that use `github.com/hibiken/asynqmon` can switch by changing the import path and the package name (`asynqmon.New` → `asynqdash.New`); the options are the same.
+Projects that use `github.com/hibiken/asynqmon` can switch by changing the import path and the package name (`asynqmon.New` → `asynqdash.New`), and `github.com/hibiken/asynq` to `github.com/jpedrosouza/asynq`; the options are the same.
 
 Example with [net/http](https://pkg.go.dev/net/http):
 
@@ -214,7 +219,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/hibiken/asynq"
+	"github.com/jpedrosouza/asynq"
 	"github.com/jpedrosouza/asynqdash"
 )
 
