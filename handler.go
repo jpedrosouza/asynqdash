@@ -228,6 +228,27 @@ func muxRouter(opts Options, rc redis.UniversalClient, inspector *asynq.Inspecto
 
 	// Groups endponts
 	api.HandleFunc("/queues/{qname}/groups", newListGroupsHandlerFunc(inspector)).Methods("GET")
+	api.HandleFunc("/queues/{qname}/groups/{gname}:flush", newFlushGroupHandlerFunc(inspector)).Methods("POST")
+
+	// Task metrics recorded by the asynq servers.
+	api.HandleFunc("/queues/{qname}/task_metrics", newGetTaskMetricsHandlerFunc(inspector)).Methods("GET")
+
+	// Queue metadata (categories).
+	api.HandleFunc("/queue_metadata", newListQueueMetadataHandlerFunc(inspector)).Methods("GET")
+	api.HandleFunc("/queues/{qname}/metadata", newSetQueueMetadataHandlerFunc(inspector)).Methods("POST")
+
+	// Rate limits.
+	api.HandleFunc("/queues/{qname}/rate_limit", newSetQueueRateLimitHandlerFunc(inspector)).Methods("POST")
+	api.HandleFunc("/queues/{qname}/rate_limit", newRemoveQueueRateLimitHandlerFunc(inspector)).Methods("DELETE")
+	api.HandleFunc("/rate_limits", newListRateLimitsHandlerFunc(inspector)).Methods("GET")
+	api.HandleFunc("/rate_limits/{key}", newSetRateLimitHandlerFunc(inspector)).Methods("POST")
+	api.HandleFunc("/rate_limits/{key}", newRemoveRateLimitHandlerFunc(inspector)).Methods("DELETE")
+
+	// Flows.
+	api.HandleFunc("/flows", newListFlowsHandlerFunc(inspector)).Methods("GET")
+	api.HandleFunc("/flows/{name}", newDeleteFlowHandlerFunc(inspector)).Methods("DELETE")
+	api.HandleFunc("/flow_runs", newListFlowRunsHandlerFunc(inspector)).Methods("GET")
+	api.HandleFunc("/flow_runs/{run_id}", newGetFlowRunHandlerFunc(inspector, resultFmt)).Methods("GET")
 
 	// Servers endpoints.
 	api.HandleFunc("/servers", newListServersHandlerFunc(inspector, listPayloadFmt)).Methods("GET")

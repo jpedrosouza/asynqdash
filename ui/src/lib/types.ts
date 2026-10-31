@@ -20,6 +20,26 @@ export interface Queue {
   processed: number;
   failed: number;
   timestamp: string;
+  /** User defined organization of the queue (see the queue details dialog). */
+  category?: string;
+  subcategory?: string;
+  description?: string;
+  /** Rate limit of the queue, absent if none. */
+  rate_limit?: RateLimitInfo;
+}
+
+export interface RateLimitInfo {
+  limit: number;
+  period_ms: number;
+  burst: number;
+  /** Number of tasks that may start right now. */
+  available: number;
+  /** Time the next task may start. */
+  next_at: string;
+}
+
+export interface KeyRateLimit extends RateLimitInfo {
+  key: string;
 }
 
 export type ThroughputResolution = "minute" | "hour";
@@ -64,11 +84,126 @@ export interface TaskInfo {
   result: string;
   ttl_seconds: number;
   is_orphaned: boolean;
+  /** Time the task was first enqueued (absent for tasks enqueued by older asynq versions). */
+  enqueued_at?: string;
+  /** Start of the last processing attempt. */
+  started_at?: string;
+  /** Duration of the last processing attempt, in milliseconds. */
+  duration_ms?: number;
+  /** Time the task waited in the pending state before its last attempt, in milliseconds. */
+  wait_ms?: number;
+  flow?: string;
+  flow_run_id?: string;
+  parent_id?: string;
+  rate_limit_key?: string;
+  /** Number of tasks in the batch carried by the task (asynq.NewBatchTask). */
+  batch_size?: number;
+  /** Tasks of the batch (task details only). */
+  batch_items?: BatchItem[];
+}
+
+export interface BatchItem {
+  id: string;
+  type: string;
+  payload: string;
+  retried: number;
+  max_retry: number;
+  enqueued_at?: string;
+  error_message?: string;
 }
 
 export interface GroupInfo {
   group: string;
   size: number;
+  oldest_task_at?: string;
+  newest_task_at?: string;
+  /** Aggregation policy last used by a server; disabled criteria are 0. */
+  policy?: GroupPolicy;
+  flush_requested: boolean;
+}
+
+export interface GroupPolicy {
+  max_size: number;
+  min_size: number;
+  grace_period_sec: number;
+  max_delay_sec: number;
+}
+
+/** Processing metrics of a set of tasks. Durations are in milliseconds. */
+export interface TaskMetricsStats {
+  processed: number;
+  failed: number;
+  total_ms: number;
+  avg_ms: number;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  max_ms: number;
+  wait_avg_ms: number;
+  wait_p95_ms: number;
+  wait_max_ms: number;
+}
+
+export interface TaskMetricsPoint extends TaskMetricsStats {
+  /** Bucket start, in unix seconds. */
+  time: number;
+}
+
+export interface TaskMetricsResponse {
+  queue: string;
+  resolution: ThroughputResolution;
+  start: number;
+  end: number;
+  types: string[];
+  points: TaskMetricsPoint[];
+  summary: TaskMetricsStats;
+  /** Sorted by total processing time, slowest first. */
+  by_type: (TaskMetricsStats & { type: string })[];
+}
+
+export interface FlowStep {
+  from: string[];
+  to: string;
+  join: boolean;
+}
+
+export interface FlowInfo {
+  name: string;
+  steps: FlowStep[];
+  updated_at: string;
+}
+
+export type FlowNodeState = "pending" | "scheduled" | "active" | "retry" | "completed" | "failed";
+
+export interface FlowNode {
+  id: string;
+  queue: string;
+  type: string;
+  parents: string[];
+  state: FlowNodeState;
+  enqueued_at?: string;
+  started_at?: string;
+  duration_ms: number;
+  error?: string;
+  result?: string;
+}
+
+export interface FlowRun {
+  id: string;
+  flow: string;
+  root_id: string;
+  root_queue: string;
+  root_type: string;
+  state: "running" | "completed" | "failed";
+  created_at: string;
+  updated_at: string;
+  nodes: FlowNode[];
+}
+
+export interface QueueMetadata {
+  category: string;
+  subcategory: string;
+  description: string;
 }
 
 export interface ListTasksResponse {

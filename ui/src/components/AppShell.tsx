@@ -5,7 +5,9 @@ import {
   ChartLineIcon,
   ClockCountdownIcon,
   DatabaseIcon,
+  GaugeIcon,
   GearSixIcon,
+  GitForkIcon,
   HardDrivesIcon,
   ListIcon,
   MagnifyingGlassIcon,
@@ -44,16 +46,43 @@ function NavItem({
   );
 }
 
+/** Queues of the sidebar, in a group per category (uncategorized queues in a group named "Queues"). */
 function QueueNavList() {
   const { data: queues } = useQueues();
-  const location = useLocation();
   if (!queues || queues.length === 0) return null;
   const sorted = [...queues].sort((a, b) => a.queue.localeCompare(b.queue));
+  const byCategory = new Map<string, typeof sorted>();
+  for (const q of sorted) {
+    const c = q.category ?? "";
+    if (!byCategory.has(c)) byCategory.set(c, []);
+    byCategory.get(c)!.push(q);
+  }
+  const categories = [...byCategory.keys()].filter((c) => c).sort();
+  return (
+    <>
+      {categories.map((c) => (
+        <QueueNavGroup key={c} label={c} queues={byCategory.get(c)!} />
+      ))}
+      {byCategory.has("") && (
+        <QueueNavGroup label={categories.length > 0 ? "Other queues" : "Queues"} queues={byCategory.get("")!} />
+      )}
+    </>
+  );
+}
+
+function QueueNavGroup({
+  label,
+  queues,
+}: {
+  label: string;
+  queues: NonNullable<ReturnType<typeof useQueues>["data"]>;
+}) {
+  const location = useLocation();
   return (
     <Sidebar.Group>
-      <Sidebar.GroupLabel>Queues</Sidebar.GroupLabel>
+      <Sidebar.GroupLabel>{label}</Sidebar.GroupLabel>
       <Sidebar.Menu>
-        {sorted.map((q) => {
+        {queues.map((q) => {
           const href = queuePath(q.queue);
           const active = decodeURIComponent(location.pathname).startsWith(`/queues/${q.queue}`);
           const attention = q.archived + q.retry;
@@ -93,6 +122,8 @@ function AppSidebar() {
             <NavItem to={paths.home} icon={StackIcon} label="Queues" end />
             <NavItem to={paths.servers} icon={HardDrivesIcon} label="Servers" />
             <NavItem to={paths.schedulers} icon={ClockCountdownIcon} label="Schedulers" />
+            <NavItem to={paths.flows} icon={GitForkIcon} label="Flows" />
+            <NavItem to={paths.rateLimits} icon={GaugeIcon} label="Rate limits" />
             <NavItem to={paths.redis} icon={DatabaseIcon} label="Redis" />
             {PROMETHEUS_ADDRESS && <NavItem to={paths.metrics} icon={ChartLineIcon} label="Metrics" />}
           </Sidebar.Menu>

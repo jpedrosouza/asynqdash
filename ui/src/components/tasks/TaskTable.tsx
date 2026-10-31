@@ -28,7 +28,7 @@ import { READ_ONLY } from "../../lib/flags";
 import { useTaskList } from "../../lib/queries";
 import { PAGE_SIZE_OPTIONS, useSettings, type TaskOrder } from "../../lib/settings";
 import { ACTION_LABELS, TASK_STATE_META } from "../../lib/task-states";
-import { formatDuration, formatNumber, payloadPreview, pluralize, shortId } from "../../lib/format";
+import { formatDuration, formatMs, formatNumber, payloadPreview, pluralize, shortId } from "../../lib/format";
 import { taskPath } from "../../lib/paths";
 import { ErrorState, RelativeTime, SkeletonRows } from "../common";
 import { ACTION_ICONS } from "./TaskActionIcons";
@@ -61,6 +61,53 @@ function RetriesCell({ task }: { task: TaskInfo }) {
   );
 }
 
+/** Duration of the last processing attempt, with the wait time before it in a tooltip. */
+function DurationCell({ task }: { task: TaskInfo }) {
+  if (task.duration_ms === undefined) return <span className="text-kumo-subtle">—</span>;
+  const wait = task.wait_ms !== undefined ? `Waited ${formatMs(task.wait_ms)} in the queue before starting` : null;
+  const cell = <span className="tabular whitespace-nowrap">{formatMs(task.duration_ms)}</span>;
+  return wait ? <Tooltip content={wait}>{cell}</Tooltip> : cell;
+}
+
+function WaitCell({ task }: { task: TaskInfo }) {
+  if (task.wait_ms === undefined) return <span className="text-kumo-subtle">—</span>;
+  return <span className="tabular whitespace-nowrap text-kumo-subtle">{formatMs(task.wait_ms)}</span>;
+}
+
+/** Badges for the relations of a task: flow run, batch and rate limit. */
+function TaskTags({ task }: { task: TaskInfo }) {
+  const tags: ReactNode[] = [];
+  if (task.batch_size) {
+    tags.push(
+      <Tooltip key="batch" content={`Batch of ${formatNumber(task.batch_size)} tasks aggregated from a group`}>
+        <Badge variant="secondary">batch · {formatNumber(task.batch_size)}</Badge>
+      </Tooltip>,
+    );
+  }
+  if (task.flow_run_id) {
+    tags.push(
+      <Tooltip key="flow" content={task.flow ? `Part of a run of the flow "${task.flow}"` : "Part of a flow run"}>
+        <Badge variant="secondary">flow{task.flow ? ` · ${task.flow}` : ""}</Badge>
+      </Tooltip>,
+    );
+  }
+  if (task.rate_limit_key) {
+    tags.push(
+      <Tooltip key="rl" content={`Subject to the rate limit "${task.rate_limit_key}"`}>
+        <Badge variant="outline">{task.rate_limit_key}</Badge>
+      </Tooltip>,
+    );
+  }
+  return tags.length > 0 ? <span className="flex flex-wrap gap-1">{tags}</span> : null;
+}
+
+/** Column showing when the task was enqueued, for the states where it is still waiting. */
+const enqueuedColumn: Column = {
+  key: "enqueued",
+  label: "Enqueued",
+  render: (t) => <RelativeTime value={t.enqueued_at} />,
+};
+
 /** Columns that only make sense for some task states. */
 function stateColumns(state: TaskState): Column[] {
   switch (state) {
@@ -85,24 +132,35 @@ function stateColumns(state: TaskState): Column[] {
         { key: "deadline", label: "Deadline", render: (t) => <RelativeTime value={t.deadline} /> },
       ];
     case "pending":
-      return [{ key: "retried", label: "Retries", render: (t) => <RetriesCell task={t} /> }];
+      return [enqueuedColumn, { key: "retried", label: "Retries", render: (t) => <RetriesCell task={t} /> }];
     case "aggregating":
-      return [{ key: "group", label: "Group", render: (t) => <span className="font-mono text-xs">{t.group}</span> }];
+      return [
+        { key: "group", label: "Group", render: (t) => <span className="font-mono text-xs">{t.group}</span> },
+        enqueuedColumn,
+      ];
     case "scheduled":
-      return [{ key: "next", label: "Runs", render: (t) => <RelativeTime value={t.next_process_at} /> }];
+      return [
+        { key: "next", label: "Runs", render: (t) => <RelativeTime value={t.next_process_at} /> },
+        enqueuedColumn,
+      ];
     case "retry":
       return [
         { key: "next", label: "Next retry", render: (t) => <RelativeTime value={t.next_process_at} /> },
         { key: "error", label: "Last error", render: (t) => <ErrorCell message={t.error_message} /> },
         { key: "retried", label: "Retries", render: (t) => <RetriesCell task={t} /> },
+        { key: "duration", label: "Last attempt", render: (t) => <DurationCell task={t} /> },
       ];
     case "archived":
       return [
         { key: "failed", label: "Last failed", render: (t) => <RelativeTime value={t.last_failed_at} /> },
         { key: "error", label: "Last error", render: (t) => <ErrorCell message={t.error_message} /> },
+        { key: "duration", label: "Last attempt", render: (t) => <DurationCell task={t} /> },
       ];
     case "completed":
       return [
+        { key: "enqueued", label: "Enqueued", render: (t) => <RelativeTime value={t.enqueued_at} /> },
+        { key: "wait", label: "Wait", render: (t) => <WaitCell task={t} /> },
+        { key: "duration", label: "Duration", render: (t) => <DurationCell task={t} /> },
         { key: "completed", label: "Completed", render: (t) => <RelativeTime value={t.completed_at} /> },
         {
           key: "ttl",
@@ -266,7 +324,12 @@ export function TaskTable({ qname, state, totalCount, group }: TaskTableProps) {
       {
         key: "type",
         label: "Type",
-        render: (t) => <span className="font-mono text-xs font-medium whitespace-nowrap">{t.type}</span>,
+        render: (t) => (
+          <span className="flex flex-col gap-1">
+            <span className="font-mono text-xs font-medium whitespace-nowrap">{t.type}</span>
+            <TaskTags task={t} />
+          </span>
+        ),
       },
       ...stateColumns(state),
       // Last, so that it takes the remaining width without pushing state columns off screen.
