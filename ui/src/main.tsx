@@ -16,6 +16,9 @@ import { TaskPage } from "./pages/TaskPage";
 import { ServersPage } from "./pages/ServersPage";
 import { SchedulersPage } from "./pages/SchedulersPage";
 import { RedisPage } from "./pages/RedisPage";
+import { FlowsPage } from "./pages/FlowsPage";
+import { FlowRunPage } from "./pages/FlowRunPage";
+import { RateLimitsPage } from "./pages/RateLimitsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { RouteErrorPage } from "./pages/RouteErrorPage";
@@ -36,6 +39,9 @@ const router = createBrowserRouter(
             { path: "servers", element: <ServersPage /> },
             { path: "schedulers", element: <SchedulersPage /> },
             { path: "redis", element: <RedisPage /> },
+            { path: "flows", element: <FlowsPage /> },
+            { path: "flows/runs/:runId", element: <FlowRunPage /> },
+            { path: "rate-limits", element: <RateLimitsPage /> },
             // Loaded on demand: it bundles the time series charts.
             {
               path: "metrics",

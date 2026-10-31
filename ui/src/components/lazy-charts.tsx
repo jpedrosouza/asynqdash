@@ -44,3 +44,13 @@ export function ThroughputChart(props: ComponentProps<typeof ThroughputChartImpl
     </Suspense>
   );
 }
+
+const DurationChartImpl = lazy(() => charts().then((m) => ({ default: m.DurationChart })));
+
+export function DurationChart(props: ComponentProps<typeof DurationChartImpl>) {
+  return (
+    <Suspense fallback={<ChartFallback height={props.height ?? 260} />}>
+      <DurationChartImpl {...props} />
+    </Suspense>
+  );
+}

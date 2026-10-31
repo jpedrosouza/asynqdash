@@ -3,6 +3,11 @@ import type {
   AllTasksResponse,
   BatchResponse,
   DailyStat,
+  FlowInfo,
+  FlowRun,
+  KeyRateLimit,
+  QueueMetadata,
+  TaskMetricsResponse,
   ListGroupsResponse,
   ListTasksResponse,
   MetricsResponse,
@@ -175,3 +180,53 @@ export function getMetrics(endTime: number, duration: number, queues: string[]):
   if (queues.length > 0) params.set("queues", queues.join(","));
   return request("GET", `/metrics?${params.toString()}`);
 }
+
+/* ---------------------------- Task metrics ----------------------------- */
+
+/** Processing durations and counts recorded by the asynq servers for the tasks of a queue. */
+export function getTaskMetrics(
+  qname: string,
+  resolution: ThroughputResolution,
+  start: number,
+  end: number,
+  type?: string,
+): Promise<TaskMetricsResponse> {
+  const params = new URLSearchParams({ resolution, start: String(start), end: String(end) });
+  if (type) params.set("type", type);
+  return request("GET", `/queues/${q(qname)}/task_metrics?${params.toString()}`);
+}
+
+/* ------------------------ Queue metadata & limits ---------------------- */
+
+export const setQueueMetadata = (qname: string, md: QueueMetadata) =>
+  request<void>("POST", `/queues/${q(qname)}/metadata`, md);
+
+export interface RateLimitInput {
+  limit: number;
+  period_ms: number;
+  burst: number;
+}
+
+export const setQueueRateLimit = (qname: string, rl: RateLimitInput) =>
+  request<void>("POST", `/queues/${q(qname)}/rate_limit`, rl);
+export const removeQueueRateLimit = (qname: string) => request<void>("DELETE", `/queues/${q(qname)}/rate_limit`);
+
+export const listRateLimits = () =>
+  request<{ rate_limits: KeyRateLimit[] }>("GET", "/rate_limits").then((r) => r.rate_limits);
+export const setRateLimit = (key: string, rl: RateLimitInput) => request<void>("POST", `/rate_limits/${q(key)}`, rl);
+export const removeRateLimit = (key: string) => request<void>("DELETE", `/rate_limits/${q(key)}`);
+
+export const flushGroup = (qname: string, group: string) =>
+  request<void>("POST", `/queues/${q(qname)}/groups/${q(group)}:flush`);
+
+/* -------------------------------- Flows -------------------------------- */
+
+export const listFlows = () => request<{ flows: FlowInfo[] }>("GET", "/flows").then((r) => r.flows);
+export const deleteFlow = (name: string) => request<void>("DELETE", `/flows/${q(name)}`);
+
+export const listFlowRuns = (flow: string, page: PageOptions) =>
+  request<{ runs: FlowRun[] }>("GET", `/flow_runs${pageQuery(page)}${flow ? `&flow=${q(flow)}` : ""}`).then(
+    (r) => r.runs,
+  );
+
+export const getFlowRun = (id: string) => request<FlowRun>("GET", `/flow_runs/${q(id)}`);

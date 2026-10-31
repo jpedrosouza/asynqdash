@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
+  Badge,
   Breadcrumbs,
   Button,
   DropdownMenu,
   Empty,
   LayerCard,
+  Meter,
   Select,
   Table,
   Tabs,
@@ -16,14 +18,32 @@ import {
   ChartBarHorizontalIcon,
   ChartLineIcon,
   DotsThreeVerticalIcon,
+  GaugeIcon,
   InfoIcon,
+  LightningIcon,
   PauseIcon,
+  PencilSimpleIcon,
   PlayIcon,
   TrashIcon,
   TrayIcon,
 } from "@phosphor-icons/react";
 import { READ_ONLY } from "../lib/flags";
-import { useGroups, useProcessedToday, useQueue, useQueueActions, useTaskTypes, useThroughput } from "../lib/queries";
+import {
+  useFlushGroup,
+  useGroups,
+  useProcessedToday,
+  useQueue,
+  useQueueActions,
+  useQueueSettings,
+  useQueues,
+  useTaskTypes,
+  useThroughput,
+} from "../lib/queries";
+import { useNow } from "../lib/hooks";
+import { QueueDetailsDialog, RateLimitDialog } from "../components/QueueDialogs";
+import { TaskDurationCard } from "../components/TaskDurationCard";
+import { formatDuration, formatRateLimit, formatRelative, parseTime } from "../lib/format";
+import type { GroupInfo } from "../lib/types";
 import { useSettings, type ThroughputRange } from "../lib/settings";
 import { isUtcDays, lastDays, sumByDay, sumQueues } from "../lib/throughput";
 import { ThroughputChart } from "../components/lazy-charts";
@@ -50,8 +70,11 @@ function QueueStats({ queue }: { queue: Queue }) {
   // asynq counts "today" in UTC; say so when the selected time zone has another day.
   const utcNote = today.source === "utc" && !isUtcDays(settings.timeZone) ? "UTC day" : undefined;
   const errorRate = ratio(failed, processed);
+  const now = useNow(1000);
+  const rl = queue.rate_limit;
+  const nextAt = parseTime(rl?.next_at);
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-3", rl ? "lg:grid-cols-7" : "lg:grid-cols-6")}>
       <Stat
         label="Size"
         value={<LiveNumber value={queue.size} format={formatNumber} />}
@@ -76,6 +99,104 @@ function QueueStats({ queue }: { queue: Queue }) {
         value={formatPercent(errorRate)}
         tone={errorRate > 0.05 ? "danger" : errorRate > 0 ? "warning" : "success"}
       />
+      {rl && (
+        <Stat
+          label="Rate limit"
+          value={`${formatNumber(rl.available)} / ${formatNumber(rl.burst)}`}
+          tone={rl.available === 0 && queue.pending > 0 ? "warning" : "default"}
+          hint={
+            rl.available > 0 || !nextAt
+              ? formatRateLimit(rl)
+              : `Next task ${formatRelative(nextAt, now)} · ${formatRateLimit(rl)}`
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+/** How far a group is from being aggregated, according to the policy last used by a server. */
+function GroupProgress({ qname, group }: { qname: string; group: GroupInfo }) {
+  const now = useNow(5000);
+  const flush = useFlushGroup(qname);
+  const p = group.policy;
+  const oldest = parseTime(group.oldest_task_at);
+  const newest = parseTime(group.newest_task_at);
+  const items: React.ReactNode[] = [];
+  if (p?.max_size) {
+    items.push(
+      <div key="size" className="flex min-w-48 flex-col gap-1">
+        <Meter
+          label={`${formatNumber(group.size)} of ${formatNumber(p.max_size)} tasks`}
+          value={Math.min(group.size, p.max_size)}
+          max={p.max_size}
+          showValue={false}
+        />
+        <span className="text-xs text-kumo-subtle">
+          Aggregated when it reaches {formatNumber(p.max_size)} tasks
+          {p.min_size > 1 && ` (needs ${formatNumber(p.min_size)} before the grace period applies)`}
+        </span>
+      </div>,
+    );
+  }
+  if (p?.max_delay_sec && oldest) {
+    const due = oldest.getTime() + p.max_delay_sec * 1000;
+    items.push(
+      <div key="delay" className="flex flex-col text-sm">
+        <span className="text-xs text-kumo-subtle">Max delay ({formatDuration(p.max_delay_sec)})</span>
+        <span className="tabular">{due <= now ? "due now" : `aggregated ${formatRelative(new Date(due), now)}`}</span>
+      </div>,
+    );
+  }
+  if (p?.grace_period_sec && newest) {
+    const due = newest.getTime() + p.grace_period_sec * 1000;
+    const enough = group.size >= Math.max(p.min_size, 1);
+    items.push(
+      <div key="grace" className="flex flex-col text-sm">
+        <span className="text-xs text-kumo-subtle">Grace period ({formatDuration(p.grace_period_sec)})</span>
+        <span className="tabular">
+          {!enough
+            ? `waits for ${formatNumber(p.min_size - group.size)} more tasks`
+            : due <= now
+              ? "due now"
+              : `aggregated ${formatRelative(new Date(due), now)} if no task is added`}
+        </span>
+      </div>,
+    );
+  }
+  if (oldest) {
+    items.push(
+      <div key="age" className="flex flex-col text-sm">
+        <span className="text-xs text-kumo-subtle">Oldest task</span>
+        <span className="tabular">waiting for {formatDuration((now - oldest.getTime()) / 1000)}</span>
+      </div>,
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-b border-kumo-hairline px-3 py-3">
+      {items}
+      {!p && (
+        <span className="text-xs text-kumo-subtle">
+          No aggregation policy published yet (servers with asynq v0.28 or later publish it at their next check).
+        </span>
+      )}
+      {!READ_ONLY && (
+        <div className="ml-auto flex items-center gap-2">
+          {group.flush_requested && <Badge variant="secondary">Flush requested</Badge>}
+          <Tooltip content="Aggregate the group at the next check of a server, whatever its policy.">
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={LightningIcon}
+              loading={flush.isPending}
+              disabled={group.flush_requested}
+              onClick={() => flush.mutate(group.group)}
+            >
+              Flush now
+            </Button>
+          </Tooltip>
+        </div>
+      )}
     </div>
   );
 }
@@ -199,30 +320,34 @@ function GroupPicker({
   if (groups.length === 0) {
     return <Empty size="sm" title="No aggregating tasks" description={TASK_STATE_META.aggregating.emptyDescription} />;
   }
+  const selected = groups.find((g) => g.group === value);
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-kumo-hairline px-3 py-2">
-      <Select
-        aria-label="Task group"
-        value={value ?? ""}
-        onValueChange={(v) => onChange(String(v))}
-        size="sm"
-        className="min-w-56"
-        renderValue={(v: unknown) => {
-          const g = groups.find((x) => x.group === v);
-          return g ? `${g.group} (${formatNumber(g.size)})` : "Select a group";
-        }}
-      >
-        {groups.map((g) => (
-          <Select.Option key={g.group} value={g.group}>
-            <span className="flex w-full justify-between gap-6">
-              <span className="font-mono text-xs">{g.group}</span>
-              <span className="tabular text-kumo-subtle">{formatNumber(g.size)}</span>
-            </span>
-          </Select.Option>
-        ))}
-      </Select>
-      <span className="text-sm text-kumo-subtle">{formatNumber(groups.length)} groups waiting to be aggregated</span>
-    </div>
+    <>
+      <div className="flex flex-wrap items-center gap-3 border-b border-kumo-hairline px-3 py-2">
+        <Select
+          aria-label="Task group"
+          value={value ?? ""}
+          onValueChange={(v) => onChange(String(v))}
+          size="sm"
+          className="min-w-56"
+          renderValue={(v: unknown) => {
+            const g = groups.find((x) => x.group === v);
+            return g ? `${g.group} (${formatNumber(g.size)})` : "Select a group";
+          }}
+        >
+          {groups.map((g) => (
+            <Select.Option key={g.group} value={g.group}>
+              <span className="flex w-full justify-between gap-6">
+                <span className="font-mono text-xs">{g.group}</span>
+                <span className="tabular text-kumo-subtle">{formatNumber(g.size)}</span>
+              </span>
+            </Select.Option>
+          ))}
+        </Select>
+        <span className="text-sm text-kumo-subtle">{formatNumber(groups.length)} groups waiting to be aggregated</span>
+      </div>
+      {selected && <GroupProgress qname={qname} group={selected} />}
+    </>
   );
 }
 
@@ -305,7 +430,11 @@ export function QueuePage() {
   const [params, setParams] = useSearchParams();
   const { data: queue, error, isLoading, refetch } = useQueue(qname);
   const { pause, resume, remove } = useQueueActions();
+  const settingsActions = useQueueSettings(qname);
+  const { data: allQueues } = useQueues();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editDetails, setEditDetails] = useState(false);
+  const [editRateLimit, setEditRateLimit] = useState(false);
 
   const statusParam = params.get("status");
   const state: TaskState = isTaskState(statusParam) ? statusParam : defaultState(queue);
@@ -353,6 +482,14 @@ export function QueuePage() {
     <Breadcrumbs size="sm">
       <Breadcrumbs.Link href={paths.home}>Queues</Breadcrumbs.Link>
       <Breadcrumbs.Separator />
+      {queue?.category && (
+        <>
+          <Breadcrumbs.Link href={`${paths.home}?category=${encodeURIComponent(queue.category)}`}>
+            {queue.subcategory ? `${queue.category} / ${queue.subcategory}` : queue.category}
+          </Breadcrumbs.Link>
+          <Breadcrumbs.Separator />
+        </>
+      )}
       <Breadcrumbs.Current>{qname}</Breadcrumbs.Current>
     </Breadcrumbs>
   );
@@ -414,10 +551,21 @@ export function QueuePage() {
           <span className="flex items-center gap-3">
             <span className="truncate">{qname}</span>
             <QueueStatusBadge paused={queue.paused} />
+            {queue.rate_limit && (
+              <Tooltip content="Servers start at most this many tasks of the queue">
+                <Badge variant="secondary" icon={<GaugeIcon />}>
+                  {formatRateLimit(queue.rate_limit)}
+                </Badge>
+              </Tooltip>
+            )}
           </span>
         }
         description={
-          queue.paused ? "This queue is paused: workers do not pick up its tasks until it is resumed." : undefined
+          queue.paused
+            ? "This queue is paused: workers do not pick up its tasks until it is resumed."
+            : queue.description
+              ? queue.description
+              : undefined
         }
         actions={
           !READ_ONLY && (
@@ -441,6 +589,13 @@ export function QueuePage() {
                   render={<Button shape="square" icon={DotsThreeVerticalIcon} aria-label="More queue actions" />}
                 />
                 <DropdownMenu.Content align="end">
+                  <DropdownMenu.Item icon={PencilSimpleIcon} onClick={() => setEditDetails(true)}>
+                    Edit details and category
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item icon={GaugeIcon} onClick={() => setEditRateLimit(true)}>
+                    {queue.rate_limit ? "Edit rate limit" : "Set rate limit"}
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Separator />
                   <DropdownMenu.Item icon={TrashIcon} variant="danger" onClick={() => setConfirmDelete(true)}>
                     Delete queue
                   </DropdownMenu.Item>
@@ -455,6 +610,8 @@ export function QueuePage() {
       <StateDistributionBar queue={queue} className="h-2" />
 
       <ThroughputCard qname={qname} />
+
+      <TaskDurationCard qname={qname} />
 
       <LayerCard className="min-w-0 overflow-hidden p-0">
         <div className="overflow-x-auto border-b border-kumo-hairline px-2 pt-1">
@@ -473,6 +630,24 @@ export function QueuePage() {
 
       <TaskTypesCard qname={qname} />
 
+      <QueueDetailsDialog
+        open={editDetails}
+        onOpenChange={setEditDetails}
+        queue={queue}
+        queues={allQueues ?? []}
+        saving={settingsActions.metadata.isPending}
+        onSave={(md) => settingsActions.metadata.mutateAsync(md)}
+      />
+      <RateLimitDialog
+        open={editRateLimit}
+        onOpenChange={setEditRateLimit}
+        title={`Rate limit of "${qname}"`}
+        description="All the servers together start at most this many tasks of the queue. It applies right away to servers running asynq v0.28 or later."
+        current={queue.rate_limit}
+        saving={settingsActions.setRateLimit.isPending || settingsActions.removeRateLimit.isPending}
+        onSave={(rl) => settingsActions.setRateLimit.mutateAsync(rl)}
+        onRemove={() => settingsActions.removeRateLimit.mutateAsync()}
+      />
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}

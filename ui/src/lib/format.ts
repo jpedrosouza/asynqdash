@@ -105,6 +105,12 @@ export function formatPercent(value: number): string {
 
 /** Shortens a task id (usually a UUID) for display. */
 export function shortId(id: string): string {
+  // Tasks enqueued by a flow step have IDs derived from their parent ("<parent id>>type#n"): show the last step.
+  const step = id.lastIndexOf(">");
+  if (step > 0) {
+    const tail = id.slice(step);
+    return tail.length > 24 ? `…${tail.slice(0, 23)}…` : `…${tail}`;
+  }
   return id.length > 13 ? `${id.slice(0, 8)}…` : id;
 }
 
@@ -138,4 +144,37 @@ export function payloadPreview(payload: string, maxLength = 140): string {
 
 export function pluralize(n: number, singular: string, plural = `${singular}s`): string {
   return `${formatNumber(n)} ${n === 1 ? singular : plural}`;
+}
+
+/** Duration given in milliseconds, with a precision fit for task processing times: "850 ms", "1.24 s", "3m 5s". */
+export function formatMs(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms)) return "—";
+  if (ms < 1) return ms === 0 ? "0 ms" : "<1 ms";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  if (ms < 10_000) return `${(ms / 1000).toFixed(2)} s`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  return formatDuration(ms / 1000);
+}
+
+/** Period given in milliseconds as a unit: "second", "minute", "5 minutes", "hour"... */
+export function formatPeriod(ms: number): string {
+  const units: [string, number][] = [
+    ["day", 86_400_000],
+    ["hour", 3_600_000],
+    ["minute", 60_000],
+    ["second", 1000],
+  ];
+  for (const [unit, size] of units) {
+    if (ms >= size && ms % size === 0) {
+      const n = ms / size;
+      return n === 1 ? unit : `${formatNumber(n)} ${unit}s`;
+    }
+  }
+  return `${formatNumber(ms)} ms`;
+}
+
+/** Rate limit as a sentence: "200 per minute (burst 20)". */
+export function formatRateLimit(rl: { limit: number; period_ms: number; burst: number }): string {
+  const burst = rl.burst > 1 ? ` (burst ${formatNumber(rl.burst)})` : "";
+  return `${formatNumber(rl.limit)} per ${formatPeriod(rl.period_ms)}${burst}`;
 }

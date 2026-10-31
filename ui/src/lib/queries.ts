@@ -277,3 +277,116 @@ export function useRunSchedulerEntry() {
     },
   });
 }
+
+/* --------------------- Task metrics, limits and flows ------------------- */
+
+export function useTaskMetrics(
+  qname: string,
+  resolution: ThroughputResolution,
+  start: number,
+  end: number,
+  type?: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["task-metrics", qname, resolution, start, end, type ?? ""] as const,
+    queryFn: () => api.getTaskMetrics(qname, resolution, start, end, type),
+    staleTime: 10_000,
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useRateLimits() {
+  const refetchInterval = useRefetchInterval();
+  return useQuery({ queryKey: ["rate-limits"] as const, queryFn: api.listRateLimits, refetchInterval });
+}
+
+export function useFlows() {
+  return useQuery({ queryKey: ["flows"] as const, queryFn: api.listFlows, refetchInterval: 30_000 });
+}
+
+export function useFlowRuns(flow: string, page: number, size: number) {
+  const refetchInterval = useRefetchInterval();
+  return useQuery({
+    queryKey: ["flow-runs", flow, page, size] as const,
+    queryFn: () => api.listFlowRuns(flow, { page, size }),
+    refetchInterval,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useFlowRun(id: string) {
+  const refetchInterval = useRefetchInterval();
+  return useQuery({
+    queryKey: ["flow-run", id] as const,
+    queryFn: () => api.getFlowRun(id),
+    refetchInterval,
+    retry: (count, err) => !(err instanceof api.ApiError && err.status === 404) && count < 1,
+  });
+}
+
+/** Mutations of the settings of a queue: details (category) and rate limit. */
+export function useQueueSettings(qname: string) {
+  const client = useQueryClient();
+  const invalidate = () => client.invalidateQueries({ queryKey: keys.queues });
+  const metadata = useMutation({
+    mutationFn: (md: { category: string; subcategory: string; description: string }) => api.setQueueMetadata(qname, md),
+    onSuccess: () => notifySuccess(`Details of "${qname}" saved`),
+    onError: (err) => notifyError(`Could not save the details of "${qname}"`, err),
+    onSettled: invalidate,
+  });
+  const setRateLimit = useMutation({
+    mutationFn: (rl: api.RateLimitInput) => api.setQueueRateLimit(qname, rl),
+    onSuccess: () => notifySuccess(`Rate limit of "${qname}" saved`, "Servers apply it right away."),
+    onError: (err) => notifyError(`Could not set the rate limit of "${qname}"`, err),
+    onSettled: invalidate,
+  });
+  const removeRateLimit = useMutation({
+    mutationFn: () => api.removeQueueRateLimit(qname),
+    onSuccess: () => notifySuccess(`Rate limit of "${qname}" removed`),
+    onError: (err) => notifyError(`Could not remove the rate limit of "${qname}"`, err),
+    onSettled: invalidate,
+  });
+  return { metadata, setRateLimit, removeRateLimit };
+}
+
+/** Mutations of the key level rate limits. */
+export function useKeyRateLimitActions() {
+  const client = useQueryClient();
+  const invalidate = () => client.invalidateQueries({ queryKey: ["rate-limits"] });
+  const set = useMutation({
+    mutationFn: ({ key, rl }: { key: string; rl: api.RateLimitInput }) => api.setRateLimit(key, rl),
+    onSuccess: (_, { key }) => notifySuccess(`Rate limit "${key}" saved`),
+    onError: (err, { key }) => notifyError(`Could not save the rate limit "${key}"`, err),
+    onSettled: invalidate,
+  });
+  const remove = useMutation({
+    mutationFn: (key: string) => api.removeRateLimit(key),
+    onSuccess: (_, key) => notifySuccess(`Rate limit "${key}" removed`),
+    onError: (err, key) => notifyError(`Could not remove the rate limit "${key}"`, err),
+    onSettled: invalidate,
+  });
+  return { set, remove };
+}
+
+export function useFlushGroup(qname: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (group: string) => api.flushGroup(qname, group),
+    onSuccess: (_, group) =>
+      notifySuccess(`Group "${group}" will be aggregated`, "A server aggregates it at its next check."),
+    onError: (err, group) => notifyError(`Could not flush the group "${group}"`, err),
+    onSettled: () => client.invalidateQueries({ queryKey: keys.groups(qname) }),
+  });
+}
+
+export function useDeleteFlow() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.deleteFlow(name),
+    onSuccess: (_, name) => notifySuccess(`Flow "${name}" removed`, "A server that still runs it publishes it again."),
+    onError: (err, name) => notifyError(`Could not remove the flow "${name}"`, err),
+    onSettled: () => client.invalidateQueries({ queryKey: ["flows"] }),
+  });
+}

@@ -251,3 +251,97 @@ export function ThroughputChart({
     />
   );
 }
+
+export interface DurationSeries {
+  name: string;
+  colorVar: string;
+  /** Previous period, drawn dashed. */
+  dashed?: boolean;
+  /** [bucket start (ms), value (ms), or null for a bucket without tasks]. */
+  data: [number, number | null][];
+}
+
+/**
+ * Processing durations (or wait times) over time, in milliseconds. Buckets without tasks show as gaps.
+ * Series of a previous period are shifted onto the current period and drawn dashed.
+ */
+export function DurationChart({
+  series,
+  start,
+  end,
+  bucketMs,
+  height = 260,
+  formatValue,
+}: {
+  series: DurationSeries[];
+  start: number;
+  end: number;
+  bucketMs: number;
+  height?: number;
+  formatValue: (ms: number) => string;
+}) {
+  const { isDarkMode, settings } = useSettings();
+  const tz = settings.timeZone;
+  const options = useMemo<KumoChartOption>(() => {
+    const timeZone = tz === "utc" ? "UTC" : undefined;
+    const dayFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone });
+    const multiDay = end - start > 2 * 86_400_000;
+    const tick = (ms: number) => (multiDay ? dayFormat.format(ms) : formatTimeShort(ms, tz));
+    const bucketLabel = (ms: number) =>
+      `${dayFormat.format(ms)}, ${formatTimeShort(ms, tz)}–${formatTimeShort(ms + bucketMs, tz)}${tz === "utc" ? " UTC" : ""}`;
+    const textColor = ChartPalette.text("secondary", isDarkMode);
+    return {
+      grid: { left: 8, right: 16, top: 12, bottom: 32, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        formatter: (params: unknown) => {
+          const items = params as { marker: string; seriesName: string; value: [number, number | null] }[];
+          if (items.length === 0) return "";
+          const rows = items
+            .map(
+              (i) =>
+                `<div style="display:flex;justify-content:space-between;gap:16px">` +
+                `<span>${i.marker}${i.seriesName}</span>` +
+                `<b>${i.value[1] === null || i.value[1] === undefined ? "—" : formatValue(i.value[1])}</b></div>`,
+            )
+            .join("");
+          return `<div style="margin-bottom:4px">${bucketLabel(items[0].value[0])}</div>${rows}`;
+        },
+      },
+      legend: { bottom: 0, icon: "circle", itemWidth: 8, itemHeight: 8, textStyle: { color: textColor } },
+      xAxis: {
+        type: "time",
+        min: start,
+        max: end,
+        axisLabel: { color: textColor, formatter: (v: number) => tick(v), hideOverlap: true },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: "value",
+        axisLabel: { color: textColor, formatter: (v: number) => formatValue(v) },
+        splitLine: { lineStyle: { opacity: 0.4 } },
+      },
+      series: series.map((s) => ({
+        name: s.name,
+        type: "line",
+        showSymbol: s.data.filter((d) => d[1] !== null).length < 3,
+        symbolSize: 5,
+        connectNulls: false,
+        lineStyle: { width: s.dashed ? 1.5 : 2, type: s.dashed ? "dashed" : "solid", opacity: s.dashed ? 0.7 : 1 },
+        itemStyle: { color: resolveColor(s.colorVar) },
+        emphasis: { focus: "series" },
+        data: s.data,
+      })),
+    } as KumoChartOption;
+  }, [series, start, end, bucketMs, tz, isDarkMode, formatValue]);
+
+  return (
+    <Chart
+      echarts={echarts}
+      options={options}
+      isDarkMode={isDarkMode}
+      height={height}
+      aria-label="Task processing durations over time"
+    />
+  );
+}

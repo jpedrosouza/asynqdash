@@ -1,10 +1,20 @@
 import type { ReactNode } from "react";
-import { Badge, Banner, Button, InlineCopyText, Meter, cn } from "@cloudflare/kumo";
-import { ClockIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
+import { Badge, Banner, Button, InlineCopyText, Link, Meter, Table, cn } from "@cloudflare/kumo";
+import { ClockIcon, GitForkIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import type { TaskInfo } from "../../lib/types";
 import { READ_ONLY } from "../../lib/flags";
 import { TASK_STATE_META, ACTION_LABELS } from "../../lib/task-states";
-import { formatDateTime, formatDuration, formatRelativeLong, parseTime } from "../../lib/format";
+import {
+  formatDateTime,
+  formatDuration,
+  formatMs,
+  formatNumber,
+  formatRelativeLong,
+  payloadPreview,
+  parseTime,
+  shortId,
+} from "../../lib/format";
+import { flowRunPath, paths, taskPath } from "../../lib/paths";
 import { useSettings } from "../../lib/settings";
 import { useNow } from "../../lib/hooks";
 import { TaskStateBadge } from "../badges";
@@ -76,14 +86,29 @@ function TaskTimeline({ task }: { task: TaskInfo }) {
   const { settings } = useSettings();
   const now = useNow(5000);
   const events: TimelineEvent[] = [];
+  const enqueued = parseTime(task.enqueued_at);
   const started = parseTime(task.start_time);
+  const lastStarted = parseTime(task.started_at);
   const failed = parseTime(task.last_failed_at);
   const next = parseTime(task.next_process_at);
   const completed = parseTime(task.completed_at);
   const deadline = parseTime(task.deadline);
-  if (started && task.state === "active") events.push({ label: "Started processing", time: started, tone: "info" });
-  if (failed) events.push({ label: "Last failure", time: failed, tone: "danger" });
-  if (completed) events.push({ label: "Completed", time: completed, tone: "success" });
+  if (enqueued) events.push({ label: "Enqueued", time: enqueued, tone: "neutral" });
+  if (started && task.state === "active") {
+    events.push({ label: "Started processing", time: started, tone: "info" });
+  } else if (lastStarted) {
+    events.push({
+      label: task.retried > 0 ? "Last attempt started" : "Started processing",
+      time: lastStarted,
+      tone: "info",
+      detail: task.wait_ms !== undefined ? `after waiting ${formatMs(task.wait_ms)} in the queue` : undefined,
+    });
+  }
+  const tookDetail = task.duration_ms !== undefined ? `took ${formatMs(task.duration_ms)}` : undefined;
+  if (failed) {
+    events.push({ label: "Last failure", time: failed, tone: "danger", detail: completed ? undefined : tookDetail });
+  }
+  if (completed) events.push({ label: "Completed", time: completed, tone: "success", detail: tookDetail });
   if (next && task.state !== "completed" && task.state !== "archived") {
     events.push({
       label:
@@ -116,9 +141,86 @@ function TaskTimeline({ task }: { task: TaskInfo }) {
             <span className="text-xs text-kumo-subtle">{formatRelativeLong(e.time, now)}</span>
           </div>
           <div className="text-xs text-kumo-subtle">{formatDateTime(e.time, settings.timeZone)}</div>
+          {e.detail && <div className="text-xs font-medium text-kumo-default">{e.detail}</div>}
         </li>
       ))}
     </ol>
+  );
+}
+
+/** Time spent waiting and processing, as a bar: where the time of the task went. */
+function TimingBar({ task }: { task: TaskInfo }) {
+  if (task.duration_ms === undefined) return null;
+  const wait = task.wait_ms ?? 0;
+  const total = Math.max(wait + task.duration_ms, 1);
+  return (
+    <div className="flex max-w-md flex-col gap-1.5">
+      <div className="flex h-2 overflow-hidden rounded-full bg-kumo-recessed">
+        {wait > 0 && <span className="bg-kumo-warning" style={{ width: `${(wait / total) * 100}%` }} />}
+        <span className="bg-kumo-info" style={{ width: `${(task.duration_ms / total) * 100}%` }} />
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-kumo-subtle">
+        {task.wait_ms !== undefined && (
+          <span className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-kumo-warning" />
+            Waiting <strong className="text-kumo-default tabular">{formatMs(task.wait_ms)}</strong>
+          </span>
+        )}
+        <span className="flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-kumo-info" />
+          Processing <strong className="text-kumo-default tabular">{formatMs(task.duration_ms)}</strong>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Tasks of a batch created by asynq.NewBatchTask. */
+function BatchItemsCard({ task }: { task: TaskInfo }) {
+  const items = task.batch_items ?? [];
+  if (items.length === 0) return null;
+  return (
+    <Card
+      title={`Batch of ${formatNumber(items.length)} tasks`}
+      description="The tasks aggregated from the group into this task. Retried items go back to the group, failed items are archived."
+      bodyClassName="p-0"
+    >
+      <div className="max-h-[420px] overflow-auto">
+        <Table>
+          <Table.Header variant="compact">
+            <Table.Row>
+              <Table.Head>ID</Table.Head>
+              <Table.Head>Type</Table.Head>
+              <Table.Head>Retries</Table.Head>
+              <Table.Head className="w-full">Payload</Table.Head>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {items.map((it, i) => (
+              <Table.Row key={it.id || i}>
+                <Table.Cell className="font-mono text-xs" title={it.id}>
+                  {it.id ? shortId(it.id) : "—"}
+                </Table.Cell>
+                <Table.Cell className="font-mono text-xs whitespace-nowrap">{it.type}</Table.Cell>
+                <Table.Cell className="tabular">
+                  {it.retried}/{it.max_retry}
+                  {it.error_message && (
+                    <span className="block max-w-[200px] truncate text-xs text-kumo-danger" title={it.error_message}>
+                      {it.error_message}
+                    </span>
+                  )}
+                </Table.Cell>
+                <Table.Cell>
+                  <span className="block max-w-[560px] truncate font-mono text-xs text-kumo-subtle">
+                    {payloadPreview(it.payload, 200)}
+                  </span>
+                </Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table>
+      </div>
+    </Card>
   );
 }
 
@@ -151,6 +253,36 @@ export function TaskDetailsBody({ task }: { task: TaskInfo }) {
               <TaskStateBadge state={task.state} />
             </KeyValue>
             {task.group && <KeyValue label="Group">{task.group}</KeyValue>}
+            {task.duration_ms !== undefined && (
+              <KeyValue label={task.state === "completed" ? "Time" : "Last attempt"}>
+                <TimingBar task={task} />
+              </KeyValue>
+            )}
+            {task.flow_run_id && (
+              <KeyValue label="Flow run">
+                <span className="flex flex-wrap items-center gap-2">
+                  <Link href={flowRunPath(task.flow_run_id)} className="flex items-center gap-1.5">
+                    <GitForkIcon />
+                    {task.flow ? `${task.flow} run` : "Run"} {shortId(task.flow_run_id)}
+                  </Link>
+                  {task.parent_id && (
+                    <span className="text-xs text-kumo-subtle">
+                      enqueued by{" "}
+                      <Link href={taskPath(task.queue, task.parent_id)} className="font-mono">
+                        {shortId(task.parent_id)}
+                      </Link>
+                    </span>
+                  )}
+                </span>
+              </KeyValue>
+            )}
+            {task.rate_limit_key && (
+              <KeyValue label="Rate limit">
+                <Link href={paths.rateLimits} className="font-mono text-xs">
+                  {task.rate_limit_key}
+                </Link>
+              </KeyValue>
+            )}
             <KeyValue label="Retries">
               <div className="flex max-w-xs flex-col gap-1">
                 <Meter
@@ -184,9 +316,12 @@ export function TaskDetailsBody({ task }: { task: TaskInfo }) {
           <TaskTimeline task={task} />
         </Card>
       </div>
-      <Card title="Payload">
-        <JsonView value={task.payload} filename={`${task.type}-${task.id}-payload`} />
-      </Card>
+      <BatchItemsCard task={task} />
+      {!task.batch_items?.length && (
+        <Card title="Payload">
+          <JsonView value={task.payload} filename={`${task.type}-${task.id}-payload`} />
+        </Card>
+      )}
       {task.state === "completed" && (
         <Card title="Result">
           <JsonView value={task.result} filename={`${task.type}-${task.id}-result`} />
