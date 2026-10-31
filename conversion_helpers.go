@@ -1,6 +1,7 @@
 package asynqdash
 
 import (
+	"strconv"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -151,6 +152,37 @@ type queueStateSnapshot struct {
 	Paused bool `json:"paused"`
 	// Time when this snapshot was taken.
 	Timestamp time.Time `json:"timestamp"`
+
+	// User defined organization of the queue.
+	Category    string `json:"category,omitempty"`
+	Subcategory string `json:"subcategory,omitempty"`
+	Description string `json:"description,omitempty"`
+
+	// RateLimit of the queue, absent if none.
+	RateLimit *rateLimitInfo `json:"rate_limit,omitempty"`
+}
+
+type rateLimitInfo struct {
+	Limit    int   `json:"limit"`
+	PeriodMs int64 `json:"period_ms"`
+	Burst    int   `json:"burst"`
+	// Available is the number of tasks that may start right now.
+	Available int `json:"available"`
+	// NextAt is the time the next task may start in RFC3339 format with milliseconds.
+	NextAt string `json:"next_at"`
+}
+
+func toRateLimitInfo(rl *asynq.RateLimitInfo) *rateLimitInfo {
+	if rl == nil {
+		return nil
+	}
+	return &rateLimitInfo{
+		Limit:     rl.Limit,
+		PeriodMs:  rl.Period.Milliseconds(),
+		Burst:     rl.Burst,
+		Available: rl.Available,
+		NextAt:    formatTimeMillis(rl.NextAt),
+	}
 }
 
 func toQueueStateSnapshot(info *asynq.QueueInfo) *queueStateSnapshot {
@@ -173,6 +205,10 @@ func toQueueStateSnapshot(info *asynq.QueueInfo) *queueStateSnapshot {
 		Failed:          info.Failed,
 		Paused:          info.Paused,
 		Timestamp:       info.Timestamp,
+		Category:        info.Metadata.Category,
+		Subcategory:     info.Metadata.Subcategory,
+		Description:     info.Metadata.Description,
+		RateLimit:       toRateLimitInfo(info.RateLimit),
 	}
 }
 
@@ -237,6 +273,13 @@ type taskInfo struct {
 	// TTL is the number of seconds the task has left to be retained in the queue.
 	// This is calculated by (CompletedAt + ResultTTL) - Now.
 	TTL int64 `json:"ttl_seconds"`
+	// Group is the group of the task, empty if none.
+	Group string `json:"group,omitempty"`
+	// BatchItems are the tasks of the batch carried by the task, if any.
+	BatchItems []*batchItem `json:"batch_items,omitempty"`
+
+	taskTiming
+	taskLineage
 }
 
 // taskTTL calculates TTL for the given task.
@@ -273,6 +316,10 @@ func toTaskInfo(info *asynq.TaskInfo, pf PayloadFormatter, rf ResultFormatter) *
 		CompletedAt:   formatTimeInRFC3339(info.CompletedAt),
 		Result:        rf.FormatResult("", info.Result),
 		TTL:           int64(taskTTL(info).Seconds()),
+		Group:         info.Group,
+		BatchItems:    toBatchItems(info, pf),
+		taskTiming:    toTaskTiming(info),
+		taskLineage:   toTaskLineage(info),
 	}
 }
 
@@ -284,6 +331,108 @@ type baseTask struct {
 	MaxRetry  int    `json:"max_retry"`
 	Retried   int    `json:"retried"`
 	LastError string `json:"error_message"`
+
+	taskTiming
+	taskLineage
+}
+
+func newBaseTask(ti *asynq.TaskInfo, pf PayloadFormatter) *baseTask {
+	return &baseTask{
+		ID:          ti.ID,
+		Type:        ti.Type,
+		Payload:     pf.FormatPayload(ti.Type, ti.Payload),
+		Queue:       ti.Queue,
+		MaxRetry:    ti.MaxRetry,
+		Retried:     ti.Retried,
+		LastError:   ti.LastErr,
+		taskTiming:  toTaskTiming(ti),
+		taskLineage: toTaskLineage(ti),
+	}
+}
+
+// taskTiming describes when a task was enqueued and how long its last processing attempt waited and took.
+type taskTiming struct {
+	// EnqueuedAt is the time the task was first enqueued in RFC3339 format with milliseconds, empty if unknown.
+	EnqueuedAt string `json:"enqueued_at,omitempty"`
+	// StartedAt is the time the last processing attempt started, empty if the task has not been processed.
+	StartedAt string `json:"started_at,omitempty"`
+	// DurationMs is the duration of the last processing attempt in milliseconds, absent if not processed.
+	DurationMs *int64 `json:"duration_ms,omitempty"`
+	// WaitMs is the time the task waited in the pending state before its last processing attempt, absent if unknown.
+	WaitMs *int64 `json:"wait_ms,omitempty"`
+}
+
+func formatTimeMillis(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2006-01-02T15:04:05.000Z07:00")
+}
+
+func toTaskTiming(ti *asynq.TaskInfo) taskTiming {
+	res := taskTiming{EnqueuedAt: formatTimeMillis(ti.EnqueuedAt), StartedAt: formatTimeMillis(ti.StartedAt)}
+	if !ti.StartedAt.IsZero() {
+		d := ti.Duration.Milliseconds()
+		res.DurationMs = &d
+		if ti.WaitTime >= 0 {
+			w := ti.WaitTime.Milliseconds()
+			res.WaitMs = &w
+		}
+	}
+	return res
+}
+
+// taskLineage describes how a task relates to other tasks and limits.
+type taskLineage struct {
+	Flow         string `json:"flow,omitempty"`
+	FlowRunID    string `json:"flow_run_id,omitempty"`
+	ParentID     string `json:"parent_id,omitempty"`
+	RateLimitKey string `json:"rate_limit_key,omitempty"`
+	// BatchSize is the number of tasks in the batch carried by the task, if it was created by asynq.NewBatchTask.
+	BatchSize int `json:"batch_size,omitempty"`
+}
+
+func toTaskLineage(ti *asynq.TaskInfo) taskLineage {
+	res := taskLineage{Flow: ti.Flow, FlowRunID: ti.FlowRunID, ParentID: ti.ParentID, RateLimitKey: ti.RateLimitKey}
+	if n, err := strconv.Atoi(ti.Headers[asynq.BatchTaskHeader]); err == nil {
+		res.BatchSize = n
+	}
+	return res
+}
+
+// batchItem describes a task of a batch created by asynq.NewBatchTask.
+type batchItem struct {
+	ID         string `json:"id"`
+	Type       string `json:"type"`
+	Payload    string `json:"payload"`
+	Retried    int    `json:"retried"`
+	MaxRetry   int    `json:"max_retry"`
+	EnqueuedAt string `json:"enqueued_at,omitempty"`
+	LastErr    string `json:"error_message,omitempty"`
+}
+
+// toBatchItems returns the tasks of the batch carried by the task, nil if the task carries none.
+func toBatchItems(ti *asynq.TaskInfo, pf PayloadFormatter) []*batchItem {
+	if _, ok := ti.Headers[asynq.BatchTaskHeader]; !ok {
+		return nil
+	}
+	b, err := asynq.ParseBatch(asynq.NewTask(ti.Type, ti.Payload))
+	if err != nil {
+		return nil
+	}
+	items := make([]*batchItem, len(b.Items))
+	for i, it := range b.Items {
+		items[i] = &batchItem{
+			ID:         it.ID,
+			Type:       it.Type,
+			Payload:    pf.FormatPayload(it.Type, it.Payload),
+			Retried:    it.Retried,
+			MaxRetry:   it.MaxRetry,
+			EnqueuedAt: formatTimeMillis(it.EnqueuedAt),
+			LastErr:    it.LastErr,
+		}
+	}
+	return items
 }
 
 type activeTask struct {
@@ -307,15 +456,7 @@ type activeTask struct {
 }
 
 func toActiveTask(ti *asynq.TaskInfo, pf PayloadFormatter) *activeTask {
-	base := &baseTask{
-		ID:        ti.ID,
-		Type:      ti.Type,
-		Payload:   pf.FormatPayload(ti.Type, ti.Payload),
-		Queue:     ti.Queue,
-		MaxRetry:  ti.MaxRetry,
-		Retried:   ti.Retried,
-		LastError: ti.LastErr,
-	}
+	base := newBaseTask(ti, pf)
 	return &activeTask{baseTask: base, IsOrphaned: ti.IsOrphaned}
 }
 
@@ -333,15 +474,7 @@ type pendingTask struct {
 }
 
 func toPendingTask(ti *asynq.TaskInfo, pf PayloadFormatter) *pendingTask {
-	base := &baseTask{
-		ID:        ti.ID,
-		Type:      ti.Type,
-		Payload:   pf.FormatPayload(ti.Type, ti.Payload),
-		Queue:     ti.Queue,
-		MaxRetry:  ti.MaxRetry,
-		Retried:   ti.Retried,
-		LastError: ti.LastErr,
-	}
+	base := newBaseTask(ti, pf)
 	return &pendingTask{
 		baseTask: base,
 	}
@@ -361,15 +494,7 @@ type aggregatingTask struct {
 }
 
 func toAggregatingTask(ti *asynq.TaskInfo, pf PayloadFormatter) *aggregatingTask {
-	base := &baseTask{
-		ID:        ti.ID,
-		Type:      ti.Type,
-		Payload:   pf.FormatPayload(ti.Type, ti.Payload),
-		Queue:     ti.Queue,
-		MaxRetry:  ti.MaxRetry,
-		Retried:   ti.Retried,
-		LastError: ti.LastErr,
-	}
+	base := newBaseTask(ti, pf)
 	return &aggregatingTask{
 		baseTask: base,
 		Group:    ti.Group,
@@ -390,15 +515,7 @@ type scheduledTask struct {
 }
 
 func toScheduledTask(ti *asynq.TaskInfo, pf PayloadFormatter) *scheduledTask {
-	base := &baseTask{
-		ID:        ti.ID,
-		Type:      ti.Type,
-		Payload:   pf.FormatPayload(ti.Type, ti.Payload),
-		Queue:     ti.Queue,
-		MaxRetry:  ti.MaxRetry,
-		Retried:   ti.Retried,
-		LastError: ti.LastErr,
-	}
+	base := newBaseTask(ti, pf)
 	return &scheduledTask{
 		baseTask:      base,
 		NextProcessAt: ti.NextProcessAt,
@@ -419,15 +536,7 @@ type retryTask struct {
 }
 
 func toRetryTask(ti *asynq.TaskInfo, pf PayloadFormatter) *retryTask {
-	base := &baseTask{
-		ID:        ti.ID,
-		Type:      ti.Type,
-		Payload:   pf.FormatPayload(ti.Type, ti.Payload),
-		Queue:     ti.Queue,
-		MaxRetry:  ti.MaxRetry,
-		Retried:   ti.Retried,
-		LastError: ti.LastErr,
-	}
+	base := newBaseTask(ti, pf)
 	return &retryTask{
 		baseTask:      base,
 		NextProcessAt: ti.NextProcessAt,
@@ -448,15 +557,7 @@ type archivedTask struct {
 }
 
 func toArchivedTask(ti *asynq.TaskInfo, pf PayloadFormatter) *archivedTask {
-	base := &baseTask{
-		ID:        ti.ID,
-		Type:      ti.Type,
-		Payload:   pf.FormatPayload(ti.Type, ti.Payload),
-		Queue:     ti.Queue,
-		MaxRetry:  ti.MaxRetry,
-		Retried:   ti.Retried,
-		LastError: ti.LastErr,
-	}
+	base := newBaseTask(ti, pf)
 	return &archivedTask{
 		baseTask:     base,
 		LastFailedAt: ti.LastFailedAt,
@@ -480,15 +581,7 @@ type completedTask struct {
 }
 
 func toCompletedTask(ti *asynq.TaskInfo, pf PayloadFormatter, rf ResultFormatter) *completedTask {
-	base := &baseTask{
-		ID:        ti.ID,
-		Type:      ti.Type,
-		Payload:   pf.FormatPayload(ti.Type, ti.Payload),
-		Queue:     ti.Queue,
-		MaxRetry:  ti.MaxRetry,
-		Retried:   ti.Retried,
-		LastError: ti.LastErr,
-	}
+	base := newBaseTask(ti, pf)
 	return &completedTask{
 		baseTask:    base,
 		CompletedAt: ti.CompletedAt,
@@ -508,6 +601,21 @@ func toCompletedTasks(in []*asynq.TaskInfo, pf PayloadFormatter, rf ResultFormat
 type groupInfo struct {
 	Group string `json:"group"`
 	Size  int    `json:"size"`
+	// Times the oldest and newest tasks were added to the group, in RFC3339 format.
+	OldestTaskAt string `json:"oldest_task_at,omitempty"`
+	NewestTaskAt string `json:"newest_task_at,omitempty"`
+	// Policy is the aggregation policy last used for the group by a server, absent if unknown.
+	Policy *groupPolicy `json:"policy,omitempty"`
+	// FlushRequested reports whether the group will be aggregated at the next check.
+	FlushRequested bool `json:"flush_requested"`
+}
+
+// groupPolicy holds the aggregation criteria of a group. Disabled criteria are zero.
+type groupPolicy struct {
+	MaxSize        int   `json:"max_size"`
+	MinSize        int   `json:"min_size"`
+	GracePeriodSec int64 `json:"grace_period_sec"`
+	MaxDelaySec    int64 `json:"max_delay_sec"`
 }
 
 func toGroupInfos(in []*asynq.GroupInfo) []*groupInfo {
@@ -519,10 +627,22 @@ func toGroupInfos(in []*asynq.GroupInfo) []*groupInfo {
 }
 
 func toGroupInfo(in *asynq.GroupInfo) *groupInfo {
-	return &groupInfo{
-		Group: in.Group,
-		Size:  in.Size,
+	g := &groupInfo{
+		Group:          in.Group,
+		Size:           in.Size,
+		OldestTaskAt:   formatTimeInRFC3339(in.OldestTaskAt),
+		NewestTaskAt:   formatTimeInRFC3339(in.NewestTaskAt),
+		FlushRequested: in.FlushRequested,
 	}
+	if p := in.Policy; p != nil {
+		g.Policy = &groupPolicy{
+			MaxSize:        max(p.MaxSize, 0),
+			MinSize:        p.MinSize,
+			GracePeriodSec: max(int64(p.GracePeriod.Seconds()), 0),
+			MaxDelaySec:    max(int64(p.MaxDelay.Seconds()), 0),
+		}
+	}
+	return g
 }
 
 type schedulerEntry struct {

@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/google/go-cmp v0.7.0
 	github.com/gorilla/mux v1.8.0
-	github.com/jpedrosouza/asynq v0.27.1
+	github.com/jpedrosouza/asynq v0.28.0
 	github.com/jpedrosouza/asynq/x v0.27.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/redis/go-redis/v9 v9.14.1
