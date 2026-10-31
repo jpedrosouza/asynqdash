@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-31
+
+### Added
+
+- Processing time of the tasks of a queue: percentiles of the duration and of the wait time over the last hour to 30
+  days, by task type, compared with the previous period, and the task types that take the most time.
+- Task lists and details show when a task was enqueued, how long it waited and how long its last attempt took.
+- Queue categories and subcategories, edited from the queue page: the queue list and the sidebar group queues by
+  category, with totals per category.
+- Rate limits: set the rate limit of a queue from its page, and manage the key rate limits on the new Rate limits page.
+- Groups show how far they are from being aggregated (size, max delay, grace period) and can be flushed by hand; batch
+  tasks list the tasks they carry.
+- Flows page: the graph of each flow, its recent runs, and the graph of each run with the state and duration of its
+  tasks.
+
+### Changed
+
+- (pkg): Built on [github.com/jpedrosouza/asynq](https://github.com/jpedrosouza/asynq) v0.28.0, which records the task
+  metrics and runs the rate limits, batches and flows shown here: upgrade the servers that process the tasks too.
+
 ## [1.1.0] - 2026-10-24
 
 ### Changed
