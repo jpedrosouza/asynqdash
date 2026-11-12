@@ -492,7 +492,7 @@ function QueuesTable({ queues }: { queues: Queue[] }) {
     <LayerCard className="min-w-0 overflow-hidden p-0">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-kumo-hairline px-3 py-2">
         <span className="px-1 font-medium text-kumo-default">All queues</span>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 sm:justify-end">
           {hasCategories && (
             <>
               <Switch size="sm" label="Group by category" checked={grouped} onCheckedChange={setGrouped} />
@@ -516,7 +516,7 @@ function QueuesTable({ queues }: { queues: Queue[] }) {
               </Select>
             </>
           )}
-          <InputGroup size="sm" className="w-full max-w-xs">
+          <InputGroup size="sm" className="w-full sm:w-60">
             <InputGroup.Addon>
               <MagnifyingGlassIcon />
             </InputGroup.Addon>
