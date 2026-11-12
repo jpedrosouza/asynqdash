@@ -13,6 +13,7 @@ import {
   MagnifyingGlassIcon,
   StackIcon,
   EyeIcon,
+  FolderSimpleIcon,
 } from "@phosphor-icons/react";
 import { AppLink } from "./AppLink";
 import { Logo, LogoMark } from "./Logo";
@@ -46,7 +47,7 @@ function NavItem({
   );
 }
 
-/** Queues of the sidebar, in a group per category (uncategorized queues in a group named "Queues"). */
+/** Queues of the sidebar, in a group per category then subcategory (uncategorized queues in a group named "Queues"). */
 function QueueNavList() {
   const { data: queues } = useQueues();
   if (!queues || queues.length === 0) return null;
@@ -70,35 +71,99 @@ function QueueNavList() {
   );
 }
 
-function QueueNavGroup({
-  label,
-  queues,
-}: {
-  label: string;
-  queues: NonNullable<ReturnType<typeof useQueues>["data"]>;
-}) {
+type QueueList = NonNullable<ReturnType<typeof useQueues>["data"]>;
+
+/** Tasks of a set of queues that need attention: archived and retried ones. */
+function attentionOf(queues: QueueList): number {
+  return queues.reduce((n, q) => n + q.archived + q.retry, 0);
+}
+
+function attentionBadge(n: number) {
+  return n > 0 ? <Sidebar.MenuBadge>{n > 999 ? "999+" : n}</Sidebar.MenuBadge> : null;
+}
+
+function useIsQueueActive() {
   const location = useLocation();
+  const path = decodeURIComponent(location.pathname);
+  return (qname: string) => path === `/queues/${qname}` || path.startsWith(`/queues/${qname}/`);
+}
+
+/**
+ * Queues of a category: those without subcategory first, then each subcategory as a collapsible item holding its
+ * queues. A subcategory starts open, and opens again when one of its queues becomes the current page.
+ */
+function QueueNavGroup({ label, queues }: { label: string; queues: QueueList }) {
+  const isActive = useIsQueueActive();
+  const direct = queues.filter((q) => !q.subcategory);
+  const bySub = new Map<string, QueueList>();
+  for (const q of queues) {
+    if (!q.subcategory) continue;
+    if (!bySub.has(q.subcategory)) bySub.set(q.subcategory, []);
+    bySub.get(q.subcategory)!.push(q);
+  }
+  const subcategories = [...bySub.keys()].sort((a, b) => a.localeCompare(b));
   return (
     <Sidebar.Group>
       <Sidebar.GroupLabel>{label}</Sidebar.GroupLabel>
       <Sidebar.Menu>
-        {queues.map((q) => {
-          const href = queuePath(q.queue);
-          const active = decodeURIComponent(location.pathname).startsWith(`/queues/${q.queue}`);
-          const attention = q.archived + q.retry;
-          return (
-            <Sidebar.MenuButton key={q.queue} href={href} active={active} size="sm" tooltip={q.queue}>
-              <span className="truncate">{q.queue}</span>
-              {q.paused ? (
-                <Sidebar.MenuBadge>paused</Sidebar.MenuBadge>
-              ) : attention > 0 ? (
-                <Sidebar.MenuBadge>{attention > 999 ? "999+" : attention}</Sidebar.MenuBadge>
-              ) : null}
-            </Sidebar.MenuButton>
-          );
-        })}
+        {direct.map((q) => (
+          <Sidebar.MenuButton
+            key={q.queue}
+            href={queuePath(q.queue)}
+            active={isActive(q.queue)}
+            size="sm"
+            tooltip={q.queue}
+          >
+            <span className="truncate">{q.queue}</span>
+            {q.paused ? <Sidebar.MenuBadge>paused</Sidebar.MenuBadge> : attentionBadge(q.archived + q.retry)}
+          </Sidebar.MenuButton>
+        ))}
+        {subcategories.map((sub) => (
+          <QueueNavSubcategory key={sub} label={sub} queues={bySub.get(sub)!} isActive={isActive} />
+        ))}
       </Sidebar.Menu>
     </Sidebar.Group>
+  );
+}
+
+function QueueNavSubcategory({
+  label,
+  queues,
+  isActive,
+}: {
+  label: string;
+  queues: QueueList;
+  isActive: (qname: string) => boolean;
+}) {
+  const containsActive = queues.some((q) => isActive(q.queue));
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    if (containsActive) setOpen(true);
+  }, [containsActive]);
+  return (
+    <Sidebar.MenuItem>
+      <Sidebar.Collapsible open={open} onOpenChange={setOpen}>
+        <Sidebar.CollapsibleTrigger
+          render={
+            <Sidebar.MenuButton size="sm" icon={FolderSimpleIcon} tooltip={label}>
+              <span className="truncate">{label}</span>
+              {!open && attentionBadge(attentionOf(queues))}
+              <Sidebar.MenuChevron />
+            </Sidebar.MenuButton>
+          }
+        />
+        <Sidebar.CollapsibleContent>
+          <Sidebar.MenuSub>
+            {queues.map((q) => (
+              <Sidebar.MenuSubButton key={q.queue} href={queuePath(q.queue)} active={isActive(q.queue)}>
+                <span className="truncate">{q.queue}</span>
+                {q.paused ? <Sidebar.MenuBadge>paused</Sidebar.MenuBadge> : attentionBadge(q.archived + q.retry)}
+              </Sidebar.MenuSubButton>
+            ))}
+          </Sidebar.MenuSub>
+        </Sidebar.CollapsibleContent>
+      </Sidebar.Collapsible>
+    </Sidebar.MenuItem>
   );
 }
 
