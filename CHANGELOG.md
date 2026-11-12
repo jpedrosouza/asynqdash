@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-12
+
+### Changed
+
+- The sidebar shows the subcategories of a category: each one is a collapsible item holding its queues, open when one
+  of its queues is the current page, and showing the archived and retried tasks of its queues when closed. Categories
+  can also be set by the servers that process the queues, with `Inspector.SetQueueMetadata` of
+  [github.com/jpedrosouza/asynq](https://github.com/jpedrosouza/asynq).
+
 ## [1.2.0] - 2026-10-31
 
 ### Added
